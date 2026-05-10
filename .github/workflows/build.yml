@@ -1,0 +1,51 @@
+name: Build cap-rnd
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            output: rnd.exe
+            artifact: cap-rnd-win64
+
+          - os: ubuntu-latest
+            output: rnd
+            artifact: cap-rnd-linux-x64
+
+          - os: macos-latest
+            output: rnd
+            artifact: cap-rnd-macos
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Windows
+        if: runner.os == 'Windows'
+        run: |
+          g++ rndMain.cpp rnd.cpp -std=c++17 -O2 -static -Wall -Wextra -Wpedantic -o rnd.exe
+
+      - name: Build Linux/macOS
+        if: runner.os != 'Windows'
+        run: |
+          g++ rndMain.cpp rnd.cpp -std=c++17 -O2 -Wall -Wextra -Wpedantic -o rnd
+
+      - name: Strip symbols (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          strip ${{ matrix.output }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.output }}
