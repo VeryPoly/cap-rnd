@@ -57,7 +57,7 @@ jobs:
 
       - name: Verify binary exists
         run: |
-          ls -lh ${{ matrix.output }}
+          dir ${{ matrix.output }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
