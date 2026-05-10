@@ -18,7 +18,6 @@ A lightweight RNG-based rolling simulator written in C++.
 
 - Windows
 - Linux
-- Android (Termux)
 
 ---
 
@@ -79,51 +78,6 @@ chmod +x rnd
 ```bash
 ./rnd
 ```
----
-
-# Android (Termux)
-
-## Requirements
-
-Install:
-
-- Termux
-
-Available on:
-
-- F-Droid
-- GitHub Releases
-
----
-
-## Usage
-
-1. Download:
-
-```text
-cap-rnd-termux-arm64.tar.gz
-```
-
-2. Extract:
-
-```bash
-tar -xzf cap-rnd-termux-arm64.tar.gz
-```
-
-3. Enter the folder.
-
-4. Make the binary executable:
-
-```bash
-chmod +x rnd
-```
-
-5. Run:
-
-```bash
-./rnd
-```
-
 ---
 
 # Program Usage
