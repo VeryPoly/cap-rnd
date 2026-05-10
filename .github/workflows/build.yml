@@ -13,28 +13,57 @@ jobs:
   build:
     strategy:
       fail-fast: false
+
       matrix:
         include:
-          # Windows (MinGW via MSYS2)
-          - name: windows-x64
-            os: windows-latest
-            output: rnd.exe
+          # Windows
+          - os: windows-latest
             artifact: cap-rnd-win64
-            shell: msys2 {0}
-            strip: false
+            output: rnd.exe
             cxx: g++
             cxxflags: "-std=c++17 -O2 -Wall -Wextra -Wpedantic"
-            use_msys2: true
 
-          # macOS Intel
-          - name: macos-intel
-            os: macos-13
+          # Linux
+          - os: ubuntu-latest
+            artifact: cap-rnd-linux-x64
             output: rnd
-            artifact: cap-rnd-macos-intel
-            shell: bash
-            strip: true
+            cxx: g++
+            cxxflags: "-std=c++17 -O2 -Wall -Wextra -Wpedantic"
+
+          # macOS
+          - os: macos-latest
+            artifact: cap-rnd-macos
+            output: rnd
             cxx: clang++
-            cxxflags: "-std=c++17 -O2 -Wall -Wextra -Wpedantic -arch x86_64"
+            cxxflags: "-std=c++17 -O2 -Wall -Wextra -Wpedantic"
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Show compiler version
+        run: |
+          ${{ matrix.cxx }} --version
+
+      - name: Build
+        run: |
+          ${{ matrix.cxx }} \
+            ${{ matrix.cxxflags }} \
+            rndMain.cpp \
+            rnd.cpp \
+            -o ${{ matrix.output }}
+
+      - name: Verify binary exists
+        run: |
+          ls -lh ${{ matrix.output }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.output }}            cxxflags: "-std=c++17 -O2 -Wall -Wextra -Wpedantic -arch x86_64"
 
           # macOS Apple Silicon
           - name: macos-arm64
