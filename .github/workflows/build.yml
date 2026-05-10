@@ -8,127 +8,169 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  CXX: g++
-  CXXFLAGS: "-std=c++17 -O2 -Wall -Wextra -Wpedantic"
 
 jobs:
   build:
     strategy:
+      fail-fast: false
       matrix:
         include:
-          # Windows (MinGW)
-          - os: windows-latest
+          # Windows (MinGW via MSYS2)
+          - name: windows-x64
+            os: windows-latest
             output: rnd.exe
             artifact: cap-rnd-win64
+            shell: msys2 {0}
             strip: false
-            install_deps: |
-              choco install mingw -y --force
-              echo "C:\msys64\mingw64\bin" >> $GITHUB_PATH
-            container: null
+            cxx: g++
+            cxxflags: "-std=c++17 -O2 -Wall -Wextra -Wpedantic"
+            use_msys2: true
 
-          # macOS (Intel)
-          - os: macos-latest
+          # macOS Intel
+          - name: macos-intel
+            os: macos-13
             output: rnd
             artifact: cap-rnd-macos-intel
+            shell: bash
             strip: true
-            install_deps: |
-              brew update
-              brew install gcc
-            container: null
+            cxx: clang++
+            cxxflags: "-std=c++17 -O2 -Wall -Wextra -Wpedantic -arch x86_64"
 
-          # macOS (Apple Silicon)
-          - os: macos-latest
+          # macOS Apple Silicon
+          - name: macos-arm64
+            os: macos-14
             output: rnd
             artifact: cap-rnd-macos-arm64
+            shell: bash
             strip: true
-            install_deps: |
-              brew update
-              brew install gcc
-            container: null
+            cxx: clang++
+            cxxflags: "-std=c++17 -O2 -Wall -Wextra -Wpedantic -arch arm64"
 
-          # Ubuntu (native)
-          - os: ubuntu-latest
+          # Ubuntu
+          - name: ubuntu-x64
+            os: ubuntu-latest
             output: rnd
             artifact: cap-rnd-ubuntu-x64
+            shell: bash
             strip: true
+            cxx: g++
+            cxxflags: "-std=c++17 -O2 -Wall -Wextra -Wpedantic"
             install_deps: |
               sudo apt-get update
               sudo apt-get install -y g++
-            container: null
 
-          # Debian (Docker)
-          - os: ubuntu-latest
+          # Debian
+          - name: debian-x64
+            os: ubuntu-latest
+            container: debian:stable-slim
             output: rnd
             artifact: cap-rnd-debian-x64
+            shell: bash
             strip: true
+            cxx: g++
+            cxxflags: "-std=c++17 -O2 -Wall -Wextra -Wpedantic"
             install_deps: |
               apt-get update
-              apt-get install -y g++
-            container: debian:latest
+              apt-get install -y g++ binutils
 
-          # Fedora (Docker)
-          - os: ubuntu-latest
+          # Fedora
+          - name: fedora-x64
+            os: ubuntu-latest
+            container: fedora:latest
             output: rnd
             artifact: cap-rnd-fedora-x64
+            shell: bash
             strip: true
+            cxx: g++
+            cxxflags: "-std=c++17 -O2 -Wall -Wextra -Wpedantic"
             install_deps: |
-              dnf install -y gcc-c++
-            container: fedora:latest
+              dnf -y update
+              dnf install -y gcc-c++ binutils
 
-          # Arch Linux (Docker)
-          - os: ubuntu-latest
+          # Arch Linux
+          - name: arch-x64
+            os: ubuntu-latest
+            container: archlinux:latest
             output: rnd
             artifact: cap-rnd-arch-x64
+            shell: bash
             strip: true
+            cxx: g++
+            cxxflags: "-std=c++17 -O2 -Wall -Wextra -Wpedantic"
             install_deps: |
-              pacman -Syu --noconfirm gcc
-            container: archlinux:latest
+              pacman -Sy --noconfirm gcc binutils
 
-          # Alpine (Docker)
-          - os: ubuntu-latest
+          # Alpine Linux
+          - name: alpine-x64
+            os: ubuntu-latest
+            container: alpine:latest
             output: rnd
             artifact: cap-rnd-alpine-x64
+            shell: sh
             strip: true
+            cxx: g++
+            cxxflags: "-std=c++17 -O2 -Wall -Wextra -Wpedantic"
             install_deps: |
-              apk add --no-cache g++
-            container: alpine:latest
-
-          # Termux (ARM64, Docker)
-          - os: ubuntu-latest
-            output: rnd
-            artifact: cap-rnd-termux-arm64
-            strip: true
-            install_deps: |
-              pkg update -y
-              pkg install -y g++ clang make
-            container: termux/termux-docker:latest
-            env:
-              CXX: clang++  # Termux uses clang by default
-              CXXFLAGS: "-std=c++17 -O2 -Wall -Wextra -Wpedantic -static"
+              apk add --no-cache g++ binutils
 
     runs-on: ${{ matrix.os }}
-    container: ${{ matrix.container }}
+
+    container:
+      image: ${{ matrix.container || '' }}
+
+    defaults:
+      run:
+        shell: ${{ matrix.shell }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      # Windows/MSYS2 setup
+      - name: Setup MSYS2
+        if: matrix.use_msys2 == true
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-binutils
+
+      # Dependency installation for non-Windows jobs
       - name: Install dependencies
+        if: matrix.use_msys2 != true
         run: ${{ matrix.install_deps }}
 
       - name: Build
-        shell: bash
         run: |
-          ${{ matrix.env.CXX || env.CXX }} rndMain.cpp rnd.cpp ${{ matrix.env.CXXFLAGS || env.CXXFLAGS }} -o ${{ matrix.output }}
-          if [ "${{ matrix.strip }}" = "true" ]; then
-            strip ${{ matrix.output }}
+          set -e
+
+          echo "Compiler:"
+          ${{ matrix.cxx }} --version
+
+          echo "Building..."
+
+          ${{ matrix.cxx }} \
+            ${{ matrix.cxxflags }} \
+            rndMain.cpp \
+            rnd.cpp \
+            -o ${{ matrix.output }}
+
+      - name: Strip binary
+        if: matrix.strip == true
+        run: |
+          if command -v strip >/dev/null 2>&1; then
+            strip --strip-unneeded ${{ matrix.output }} || true
           fi
 
-      - name: Test executable
-        shell: bash
+      - name: Verify binary
         run: |
+          ls -lh ${{ matrix.output }}
+
           chmod +x ${{ matrix.output }} || true
-          ./${{ matrix.output }} --version || true  # Replace with actual test command
+
+          ./${{ matrix.output }} --version || true
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
