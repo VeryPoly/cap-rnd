@@ -55,9 +55,17 @@ jobs:
           rnd.cpp
           -o ${{ matrix.output }}
 
-      - name: Verify binary exists
+      - name: Verify binary exists (Windows)
+        if: runner.os == 'Windows'
         run: |
-          dir ${{ matrix.output }}
+          if (!(Test-Path "${{ matrix.output }}")) {
+            exit 1
+          }
+
+      - name: Verify binary exists (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          test -f ${{ matrix.output }}
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
