@@ -1,5 +1,6 @@
 #include "rnd.h"
 
+#include <cctype>
 #include <chrono>
 #include <iostream>
 #include <limits>
@@ -9,63 +10,90 @@ const bool ABOVE_ZERO = true;
 const bool ANY_INTEGER = false;
 
 void promptInt(int* numInput, bool aboveZero)
-{	
-	while (true)
-	{
-		if (std::cin >> *numInput) {
-			if (!aboveZero) {
-				break;
-			}
-			
-			if (!(*numInput <= 0)) {
-				break;
-			}
-		}
-		
-		std::cin.clear();
-		
-		std::cin.ignore(
-			std::numeric_limits<std::streamsize>::max(),
-			'\n' // This is a spot where \n should be used instead of std::endl so I kept it.
-		);
-		
-		if (aboveZero) {
-			std::cout << "Invalid input. Enter a number greater than zero: ";
-			continue;
-		}
-		
-		std::cout << "Invalid input. Enter a number: ";
-	}
+{
+    if (numInput == nullptr) {
+        return;
+    }
+
+    while (true)
+    {
+        if (std::cin >> *numInput) {
+            std::cin.ignore(
+                std::numeric_limits<std::streamsize>::max(),
+                '\n');
+
+            if (!aboveZero || *numInput > 0) {
+                break;
+            }
+        }
+        else
+        {
+            if (std::cin.eof()) {
+                return;
+            }
+
+            std::cin.clear();
+            std::cin.ignore(
+                std::numeric_limits<std::streamsize>::max(),
+                '\n');
+        }
+
+        if (aboveZero) {
+            std::cout << "Invalid input. Enter a number greater than zero: ";
+        } else {
+            std::cout << "Invalid input. Enter a number: ";
+        }
+    }
 }
 
 void promptBool(bool* result)
 {
-	char inputCharacter;
-	bool resultSet = false;
-	
-	while (true)
+    if (result == nullptr) {
+        return;
+    }
+
+    char inputCharacter;
+    bool resultSet = false;
+
+    while (true)
     {
-		std::cin >> inputCharacter;
+        if (!(std::cin >> inputCharacter)) {
+            if (std::cin.eof()) {
+                *result = false;
+                return;
+            }
 
-		switch ((char) tolower(inputCharacter))
-		{
-			case 'y':
-				*result = true;
-				resultSet = true;
-				break;
-			case 'n':
-				*result = false;
-				resultSet = true;
-				break;
-		}
+            std::cin.clear();
+            std::cin.ignore(
+                std::numeric_limits<std::streamsize>::max(),
+                '\n');
+            std::cout << "Invalid input, try again (y/n): ";
+            continue;
+        }
 
-		if (!resultSet) {
-			std::cout << "Invalid input, try again (y/n): " << std::endl;
-			continue;
-		}
-		
-		break;
-	}
+        std::cin.ignore(
+            std::numeric_limits<std::streamsize>::max(),
+            '\n');
+
+        switch (static_cast<char>(std::tolower(static_cast<unsigned char>(inputCharacter))))
+        {
+            case 'y':
+                *result = true;
+                resultSet = true;
+                break;
+            case 'n':
+                *result = false;
+                resultSet = true;
+                break;
+        }
+
+        if (!resultSet) {
+            std::cout << "Invalid input, try again (y/n): ";
+            continue;
+        }
+
+        break;
+    }
 }
 
 int main()
