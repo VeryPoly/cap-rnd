@@ -1,6 +1,7 @@
 #include "rnd.h"
 
 #include <iostream>
+#include <limits>
 
 rnd::rnd(int p, int co, bool kg)
     : prior(p),
@@ -8,8 +9,20 @@ rnd::rnd(int p, int co, bool kg)
       keepGoing(kg),
       rng(std::random_device{}())
 {
-    for (int i = 0; i < costOffset + 3; ++i)
+    int exponent = costOffset + 3;
+    if (exponent < 0) {
+        exponent = 0;
+    }
+
+    const long long safeLimit = std::numeric_limits<long long>::max() / 10;
+    for (int i = 0; i < exponent; ++i)
     {
+        if (multiplier > safeLimit)
+        {
+            multiplier = std::numeric_limits<long long>::max();
+            break;
+        }
+
         multiplier *= 10;
     }
 }
@@ -91,7 +104,10 @@ bool rnd::cost()
             << " crit faults\n";
     }
 
-    long long scaledCost = totalCost * multiplier;
+    __int128 scaledCost128 = static_cast<__int128>(totalCost) * multiplier;
+    long long scaledCost = scaledCost128 > std::numeric_limits<long long>::max()
+        ? std::numeric_limits<long long>::max()
+        : static_cast<long long>(scaledCost128);
 
     std::cout << "Total cost: " << scaledCost;
 
@@ -122,5 +138,11 @@ void rnd::incPrior()
 
 long long rnd::getGrandTotalCost() const
 {
-    return grandTotalCost * multiplier;
+    __int128 totalCost128 = static_cast<__int128>(grandTotalCost) * multiplier;
+    if (totalCost128 > std::numeric_limits<long long>::max())
+    {
+        return std::numeric_limits<long long>::max();
+    }
+
+    return static_cast<long long>(totalCost128);
 }
