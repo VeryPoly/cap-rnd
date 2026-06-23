@@ -6,9 +6,11 @@ on:
       - main
     tags:
       - "v*"
+
   pull_request:
     branches:
       - main
+
   workflow_dispatch:
 
 env:
@@ -21,26 +23,23 @@ jobs:
 
       matrix:
         include:
-          # Windows
           - os: windows-latest
             artifact: cap-rnd-win64
             output: rnd.exe
+            test_output: test_runner.exe
             cxx: g++
-            cxxflags: "-std=c++17 -O2 -Wall -Wextra -Wpedantic"
 
-          # Linux
           - os: ubuntu-latest
             artifact: cap-rnd-linux-x64
             output: rnd
+            test_output: test_runner
             cxx: g++
-            cxxflags: "-std=c++17 -O2 -Wall -Wextra -Wpedantic"
 
-          # macOS
           - os: macos-latest
             artifact: cap-rnd-macos
             output: rnd
+            test_output: test_runner
             cxx: clang++
-            cxxflags: "-std=c++17 -O2 -Wall -Wextra -Wpedantic"
 
     runs-on: ${{ matrix.os }}
 
@@ -52,18 +51,47 @@ jobs:
         run: |
           ${{ matrix.cxx }} --version
 
-      - name: Build
+      - name: Build application
         run: >
           ${{ matrix.cxx }}
-          ${{ matrix.cxxflags }}
+          -std=c++17
+          -O2
+          -Wall
+          -Wextra
+          -Wpedantic
           rndMain.cpp
           rnd.cpp
-          -o ${{ matrix.output }}
+          -o
+          ${{ matrix.output }}
+
+      - name: Build tests
+        run: >
+          ${{ matrix.cxx }}
+          -std=c++17
+          -O2
+          -Wall
+          -Wextra
+          -Wpedantic
+          tests/test_basic.cpp
+          rnd.cpp
+          -o
+          ${{ matrix.test_output }}
+
+      - name: Run tests (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          .\${{ matrix.test_output }}
+
+      - name: Run tests (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          ./${{ matrix.test_output }}
 
       - name: Verify binary exists (Windows)
         if: runner.os == 'Windows'
         run: |
           if (!(Test-Path "${{ matrix.output }}")) {
+            Write-Error "Binary not found"
             exit 1
           }
 
@@ -72,13 +100,34 @@ jobs:
         run: |
           test -f ${{ matrix.output }}
 
+      - name: Smoke test (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          "0`n0`n1`nn`nn" | .\${{ matrix.output }}
+
       - name: Smoke test (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
-          printf "0\n0\n1\nn\nn\n" | ./${{ matrix.output }} || (echo "smoke test failed"; exit 1)
+          printf "0\n0\n1\nn\nn\n" | ./${{ matrix.output }}
+
+      - name: Create artifact directory
+        run: |
+          mkdir -p ${{ matrix.artifact }}
+
+      - name: Copy binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Copy-Item "${{ matrix.output }}" "${{ matrix.artifact }}/"
+
+      - name: Copy binary (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cp ${{ matrix.output }} ${{ matrix.artifact }}/
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
-          path: ${{ matrix.output }}
+          path: ${{ matrix.artifact }}
