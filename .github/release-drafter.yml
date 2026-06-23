@@ -1,13 +1,86 @@
-name-template: 'v$NEXT_PATCH_VERSION'
-tag-template: 'v$NEXT_PATCH_VERSION'
-change-template: '* $TITLE @$AUTHOR (#$NUMBER)\n  $BODY'
+name-template: 'v$RESOLVED_VERSION'
+tag-template: 'v$RESOLVED_VERSION'
+
+change-template: '- $TITLE (#$NUMBER) @$AUTHOR'
+
+template: |
+  ## Changes
+
+  $CHANGES
+
 categories:
   - title: '🚀 Features'
     labels:
       - feature
-  - title: '🐛 Fixes'
+      - enhancement
+
+  - title: '🐛 Bug Fixes'
     labels:
       - bug
-  - title: '🧰 Chores'
+      - fix
+
+  - title: '🧪 Tests'
+    labels:
+      - test
+      - tests
+
+  - title: '📚 Documentation'
+    labels:
+      - documentation
+      - docs
+
+  - title: '⚙️ CI/CD'
+    labels:
+      - ci
+      - github-actions
+
+  - title: '🔧 Maintenance'
     labels:
       - chore
+      - maintenance
+      - refactor
+
+change-title-escapes: '\<*_&'
+
+version-resolver:
+  major:
+    labels:
+      - breaking-change
+
+  minor:
+    labels:
+      - feature
+      - enhancement
+
+  patch:
+    labels:
+      - bug
+      - fix
+      - documentation
+      - docs
+      - test
+      - tests
+      - ci
+      - github-actions
+      - maintenance
+      - refactor
+
+  default: patch
+
+autolabeler:
+  - label: documentation
+    files:
+      - '*.md'
+
+  - label: github-actions
+    files:
+      - '.github/**/*'
+
+  - label: test
+    files:
+      - 'tests/**/*'
+
+  - label: enhancement
+    files:
+      - '*.cpp'
+      - '*.h'
