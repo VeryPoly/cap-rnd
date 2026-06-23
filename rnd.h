@@ -1,36 +1,39 @@
 #pragma once
 
+#include <limits>
 #include <random>
 
 class rnd
 {
 private:
-    static constexpr int D20_SIDES{ 20 };
+    static constexpr int D20_SIDES = 20;
 
-    static constexpr int PERFECT_SUCCESS{ 23 };
-    static constexpr int SUCCESS{ 18 };
-    static constexpr int SUCCESS_WITH_FAULT{ 14 };
-    static constexpr int FAILURE_THRESHOLD{ 7 };
+    static constexpr int PERFECT_SUCCESS = 23;
+    static constexpr int SUCCESS = 18;
+    static constexpr int SUCCESS_WITH_FAULT = 14;
+    static constexpr int FAILURE_THRESHOLD = 7;
 
-    static constexpr int REQUIRED_SUCCESSES{ 3 };
-    static constexpr int REQUIRED_FAILURES{ 3 };
+    static constexpr int REQUIRED_SUCCESSES = 3;
+    static constexpr int REQUIRED_FAILURES = 3;
 
-    int prior{};
+    int prior;
+    int costOffset;
 
-    int successes{};
-    int fails{};
-    int faults{};
+    int successes;
+    int faults;
+    int fails;
 
-    int costOffset{};
+    long long totalCost;
+    long long grandTotalCost;
 
-    long long totalCost{};
-    long long grandTotalCost{};
+    long long multiplier;
 
-    long long multiplier{ 1 };
-
-    bool keepGoing{};
+    bool keepGoing;
 
     std::mt19937 rng;
+
+    static long long safeAdd(long long a, long long b);
+    static long long safeMultiply(long long a, long long b);
 
 public:
     rnd(int p, int co, bool kg);
@@ -44,4 +47,8 @@ public:
     void incPrior();
 
     long long getGrandTotalCost() const;
+
+    int getSuccesses() const;
+    int getFaults() const;
+    int getFails() const;
 };
