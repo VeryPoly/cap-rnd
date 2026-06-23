@@ -1,39 +1,65 @@
 #include "rnd.h"
 
 #include <iostream>
-#include <limits>
+
+long long rnd::safeAdd(long long a, long long b)
+{
+    if (b > 0 &&
+        a > std::numeric_limits<long long>::max() - b)
+    {
+        return std::numeric_limits<long long>::max();
+    }
+
+    if (b < 0 &&
+        a < std::numeric_limits<long long>::min() - b)
+    {
+        return std::numeric_limits<long long>::min();
+    }
+
+    return a + b;
+}
+
+long long rnd::safeMultiply(long long a, long long b)
+{
+    if (a == 0 || b == 0)
+        return 0;
+
+    if (a > std::numeric_limits<long long>::max() / b)
+        return std::numeric_limits<long long>::max();
+
+    return a * b;
+}
 
 rnd::rnd(int p, int co, bool kg)
     : prior(p),
       costOffset(co),
+      successes(0),
+      faults(0),
+      fails(0),
+      totalCost(0),
+      grandTotalCost(0),
+      multiplier(1),
       keepGoing(kg),
       rng(std::random_device{}())
 {
-    int exponent = costOffset + 3;
-    if (exponent < 0) {
-        exponent = 0;
-    }
+    if (prior < -20)
+        prior = -20;
 
-    const long long safeLimit = std::numeric_limits<long long>::max() / 10;
+    if (prior > 20)
+        prior = 20;
+
+    if (costOffset < -3)
+        costOffset = -3;
+
+    if (costOffset > 6)
+        costOffset = 6;
+
+    int exponent = costOffset + 3;
+
     for (int i = 0; i < exponent; ++i)
     {
-        if (multiplier > safeLimit)
-        {
-            multiplier = std::numeric_limits<long long>::max();
-            break;
-        }
-
-        multiplier *= 10;
+        multiplier = safeMultiply(multiplier, 10);
     }
-}
-
-void rnd::reset()
-{
-    successes = 0;
-    fails = 0;
-    faults = 0;
-
-    totalCost = 0;
 }
 
 bool rnd::roll()
@@ -44,7 +70,7 @@ bool rnd::roll()
 
     processRoll(rollValue);
 
-    std::cout << rollValue << ", ";
+    std::cout << rollValue << ' ';
 
     return successes >= REQUIRED_SUCCESSES
         || fails >= REQUIRED_FAILURES;
@@ -56,76 +82,96 @@ void rnd::processRoll(int rollValue)
 
     long long cost = costRoll(rng);
 
+    totalCost = safeAdd(totalCost, cost);
+
     if (rollValue >= PERFECT_SUCCESS)
     {
         successes = REQUIRED_SUCCESSES;
-
-        totalCost += cost;
-        grandTotalCost += cost;
     }
     else if (rollValue >= SUCCESS)
     {
         ++successes;
-
-        totalCost += cost;
-        grandTotalCost += cost;
     }
     else if (rollValue >= SUCCESS_WITH_FAULT)
     {
         ++successes;
         ++faults;
-
-        totalCost += cost;
-        grandTotalCost += cost;
     }
     else if (rollValue >= FAILURE_THRESHOLD)
     {
-        totalCost += cost;
-        grandTotalCost += cost;
+        // Neutral result
     }
     else
     {
         ++fails;
-
-        totalCost += cost;
-        grandTotalCost += cost;
     }
 }
 
 bool rnd::cost()
 {
+    bool success =
+        successes >= REQUIRED_SUCCESSES;
+
+    bool retry =
+        success &&
+        (faults > 0 || fails > 0);
+
+    long long scaledCost =
+        safeMultiply(totalCost, multiplier);
+
     if (fails < REQUIRED_FAILURES)
     {
         std::cout
-            << "Faults: "
+            << "\nFaults: "
             << faults
             << ", "
             << fails
             << " crit faults\n";
     }
 
-    __int128 scaledCost128 = static_cast<__int128>(totalCost) * multiplier;
-    long long scaledCost = scaledCost128 > std::numeric_limits<long long>::max()
-        ? std::numeric_limits<long long>::max()
-        : static_cast<long long>(scaledCost128);
+    std::cout
+        << "Total cost: "
+        << scaledCost;
 
-    std::cout << "Total cost: " << scaledCost;
-
-    if (successes >= REQUIRED_SUCCESSES)
+    if (retry)
     {
-        if (faults >= 1 || fails >= 1)
-        {
-            std::cout << " success, redoing to remove fault.\n\n";
-            return true;
-        }
+        std::cout
+            << " success, redoing to remove fault.\n\n";
 
-        std::cout << " success.\n\n";
+        return true;
+    }
+
+    if (success)
+    {
+        grandTotalCost =
+            safeAdd(grandTotalCost, totalCost);
+
+        std::cout
+            << " success.\n\n";
+
         return false;
     }
 
-    std::cout << " failed.\n\n";
+    std::cout
+        << " failed.\n\n";
 
-    return keepGoing;
+    if (keepGoing)
+    {
+        return true;
+    }
+
+    grandTotalCost =
+        safeAdd(grandTotalCost, totalCost);
+
+    return false;
+}
+
+void rnd::reset()
+{
+    successes = 0;
+    faults = 0;
+    fails = 0;
+    totalCost = 0;
 }
 
 void rnd::incPrior()
@@ -138,11 +184,20 @@ void rnd::incPrior()
 
 long long rnd::getGrandTotalCost() const
 {
-    __int128 totalCost128 = static_cast<__int128>(grandTotalCost) * multiplier;
-    if (totalCost128 > std::numeric_limits<long long>::max())
-    {
-        return std::numeric_limits<long long>::max();
-    }
+    return safeMultiply(grandTotalCost, multiplier);
+}
 
-    return static_cast<long long>(totalCost128);
+int rnd::getSuccesses() const
+{
+    return successes;
+}
+
+int rnd::getFaults() const
+{
+    return faults;
+}
+
+int rnd::getFails() const
+{
+    return fails;
 }
