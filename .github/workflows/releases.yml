@@ -1,11 +1,9 @@
 name: Release cap-rnd
 
 on:
-  workflow_run:
-    workflows:
-      - Build cap-rnd
-    types:
-      - completed
+  push:
+    tags:
+      - "v*"
 
 permissions:
   contents: write
@@ -15,10 +13,6 @@ env:
 
 jobs:
   release:
-    if: >
-      github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event != 'pull_request'
-
     runs-on: ubuntu-latest
 
     steps:
@@ -29,7 +23,8 @@ jobs:
         uses: dawidd6/action-download-artifact@v6
         with:
           workflow: build.yml
-          run_id: ${{ github.event.workflow_run.id }}
+          branch: main
+          workflow_conclusion: success
           name: cap-rnd-win64
           path: cap-rnd-win64
 
@@ -37,7 +32,8 @@ jobs:
         uses: dawidd6/action-download-artifact@v6
         with:
           workflow: build.yml
-          run_id: ${{ github.event.workflow_run.id }}
+          branch: main
+          workflow_conclusion: success
           name: cap-rnd-linux-x64
           path: cap-rnd-linux-x64
 
@@ -45,7 +41,8 @@ jobs:
         uses: dawidd6/action-download-artifact@v6
         with:
           workflow: build.yml
-          run_id: ${{ github.event.workflow_run.id }}
+          branch: main
+          workflow_conclusion: success
           name: cap-rnd-macos
           path: cap-rnd-macos
 
@@ -73,14 +70,4 @@ jobs:
             cap-rnd-win64.zip \
             cap-rnd-linux-x64.tar.gz \
             cap-rnd-macos.tar.gz \
-            > SHA256SUMS.txt
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          generate_release_notes: true
-          files: |
-            cap-rnd-win64.zip
-            cap-rnd-linux-x64.tar.gz
-            cap-rnd-macos.tar.gz
-            SHA256SUMS.txt
+            >
