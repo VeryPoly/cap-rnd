@@ -1,36 +1,31 @@
 #include "rnd.h"
 
-#include <cctype>
 #include <chrono>
+#include <cctype>
 #include <iostream>
 #include <limits>
 #include <thread>
 
-const bool ABOVE_ZERO = true;
-const bool ANY_INTEGER = false;
+constexpr bool ABOVE_ZERO = true;
+constexpr bool ANY_INTEGER = false;
 
-void promptInt(int* numInput, bool aboveZero)
+void promptInt(int* value, bool aboveZero)
 {
-    if (numInput == nullptr) {
-        return;
-    }
-
     while (true)
     {
-        if (std::cin >> *numInput) {
+        if (std::cin >> *value)
+        {
             std::cin.ignore(
                 std::numeric_limits<std::streamsize>::max(),
                 '\n');
 
-            if (!aboveZero || *numInput > 0) {
-                break;
-            }
+            if (!aboveZero || *value > 0)
+                return;
         }
         else
         {
-            if (std::cin.eof()) {
+            if (std::cin.eof())
                 return;
-            }
 
             std::cin.clear();
             std::cin.ignore(
@@ -38,27 +33,23 @@ void promptInt(int* numInput, bool aboveZero)
                 '\n');
         }
 
-        if (aboveZero) {
-            std::cout << "Invalid input. Enter a number greater than zero: ";
-        } else {
-            std::cout << "Invalid input. Enter a number: ";
-        }
+        std::cout
+            << (aboveZero
+                    ? "Enter a number greater than zero: "
+                    : "Enter a valid number: ");
     }
 }
 
 void promptBool(bool* result)
 {
-    if (result == nullptr) {
-        return;
-    }
-
-    char inputCharacter;
-    bool resultSet = false;
-
     while (true)
     {
-        if (!(std::cin >> inputCharacter)) {
-            if (std::cin.eof()) {
+        char c;
+
+        if (!(std::cin >> c))
+        {
+            if (std::cin.eof())
+            {
                 *result = false;
                 return;
             }
@@ -67,32 +58,28 @@ void promptBool(bool* result)
             std::cin.ignore(
                 std::numeric_limits<std::streamsize>::max(),
                 '\n');
-            std::cout << "Invalid input, try again (y/n): ";
+
             continue;
         }
 
-        std::cin.ignore(
-            std::numeric_limits<std::streamsize>::max(),
-            '\n');
+        c = static_cast<char>(
+            std::tolower(
+                static_cast<unsigned char>(c)));
 
-        switch (static_cast<char>(std::tolower(static_cast<unsigned char>(inputCharacter))))
+        if (c == 'y')
         {
-            case 'y':
-                *result = true;
-                resultSet = true;
-                break;
-            case 'n':
-                *result = false;
-                resultSet = true;
-                break;
+            *result = true;
+            return;
         }
 
-        if (!resultSet) {
-            std::cout << "Invalid input, try again (y/n): ";
-            continue;
+        if (c == 'n')
+        {
+            *result = false;
+            return;
         }
 
-        break;
+        std::cout
+            << "Enter y or n: ";
     }
 }
 
@@ -103,68 +90,90 @@ int main()
         int prior;
         int costOffset;
         int numRolls;
-        
-        bool keepGoing;
 
-		bool endChoice;
+        bool keepGoing;
+        bool continueProgram;
 
         std::cout << "Prior: ";
         promptInt(&prior, ANY_INTEGER);
 
-        std::cout << std::endl << "Cost Offset: ";
-		promptInt(&costOffset, ANY_INTEGER);
+        std::cout << "Cost Offset: ";
+        promptInt(&costOffset, ANY_INTEGER);
 
-        std::cout << std::endl << "Number of Rolls: ";
-		promptInt(&numRolls, ABOVE_ZERO);
+        std::cout << "Number of Rolls: ";
+        promptInt(&numRolls, ABOVE_ZERO);
 
-		std::cout << std::endl << "Keep Going if failed? (y/n): ";
+        std::cout
+            << "Keep Going if failed? (y/n): ";
         promptBool(&keepGoing);
 
-        std::cout << std::endl;
-
-        rnd simulator(prior, costOffset, keepGoing);
+        rnd simulator(
+            prior,
+            costOffset,
+            keepGoing);
 
         int completed = 0;
+
         while (completed < numRolls)
         {
-            int safetyCounter = 1000;
+            constexpr int MAX_RETRIES = 100;
+            int retryCount = 0;
 
-            while (!simulator.roll() && --safetyCounter > 0)
-				continue;
+            bool retry;
 
-            if (safetyCounter <= 0)
+            do
             {
-                std::cout << "Safety limit reached.\n";
-                break;
-            }
+                int safetyCounter = 1000;
 
-            std::cout << std::endl;
+                while (!simulator.roll()
+                       && --safetyCounter > 0)
+                {
+                }
 
-            bool retry = simulator.cost();
+                if (safetyCounter <= 0)
+                {
+                    std::cerr
+                        << "Safety limit exceeded.\n";
+                    return 1;
+                }
 
-            simulator.reset();
+                retry = simulator.cost();
+
+                simulator.reset();
+
+                if (retry)
+                {
+                    ++retryCount;
+
+                    if (retryCount >= MAX_RETRIES)
+                    {
+                        std::cerr
+                            << "Retry limit exceeded.\n";
+                        return 1;
+                    }
+                }
+
+            } while (retry);
+
             simulator.incPrior();
-
-            if (!retry)
-                ++completed;
+            ++completed;
         }
 
         std::cout
             << "Grand total cost across all iterations: "
             << simulator.getGrandTotalCost()
-            << std::endl << std::endl;
+            << "\n\n";
 
         std::cout
-            << "All completed." << std::endl
-            << "Wish to do more rolls? (y/n):" << std::endl;
-        promptBool(&endChoice);
+            << "Run another simulation? (y/n): ";
 
-        std::cout << std::endl << std::endl;
+        promptBool(&continueProgram);
 
-        if (!endChoice)
+        if (!continueProgram)
             break;
 
-        std::this_thread::sleep_for(std::chrono::seconds(1));
+        std::this_thread::sleep_for(
+            std::chrono::seconds(1));
     }
 
     return 0;
