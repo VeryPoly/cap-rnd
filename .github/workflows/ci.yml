@@ -21,7 +21,7 @@ permissions:
 
 jobs:
   lint-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
@@ -71,7 +71,7 @@ jobs:
           printf "0\n0\n1\nn\nn\n" | ./rnd
 
   sanitize:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
@@ -95,3 +95,57 @@ jobs:
       - name: Smoke test under sanitizers
         run: |
           printf "0\n0\n1\nn\nn\n" | ./rnd
+
+  static-analysis:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install cppcheck
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cppcheck
+
+      - name: Run cppcheck
+        run: |
+          cppcheck --language=c++ \
+            --std=c++17 \
+            --enable=warning,style,performance,portability \
+            --error-exitcode=1 \
+            --suppress=missingIncludeSystem \
+            --suppress=shadowFunction \
+            --suppress=unusedStructMember \
+            rnd.h rnd.cpp rndCli.h rndCli.cpp rndMain.cpp tests/test_basic.cpp
+
+  coverage:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install lcov
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y lcov
+
+      - name: Build tests with coverage instrumentation
+        run: |
+          g++ -std=c++17 -O0 -g --coverage tests/test_basic.cpp rndCli.cpp rnd.cpp -o test_runner
+
+      - name: Run tests
+        run: |
+          ./test_runner
+
+      - name: Generate coverage report
+        run: |
+          lcov --capture --directory . --output-file coverage.info
+          lcov --list coverage.info

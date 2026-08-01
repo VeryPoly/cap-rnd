@@ -117,15 +117,15 @@ Building From Source
 
 GCC
 
-g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic rnd.cpp rndMain.cpp -o rnd
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic rnd.cpp rndCli.cpp rndMain.cpp -o rnd
 
 Clang
 
-clang++ -std=c++17 -O2 -Wall -Wextra -Wpedantic rnd.cpp rndMain.cpp -o rnd
+clang++ -std=c++17 -O2 -Wall -Wextra -Wpedantic rnd.cpp rndCli.cpp rndMain.cpp -o rnd
 
 MSVC
 
-cl /std:c++17 /O2 rnd.cpp rndMain.cpp
+cl /std:c++17 /O2 rnd.cpp rndCli.cpp rndMain.cpp
 
 ---
 
@@ -237,6 +237,8 @@ Project Structure
 .
 ├── rnd.h
 ├── rnd.cpp
+├── rndCli.h
+├── rndCli.cpp
 ├── rndMain.cpp
 ├── tests/
 │   └── test_basic.cpp
@@ -265,7 +267,7 @@ Format source code:
 
 Run tests:
 
-g++ -std=c++17 tests/test_basic.cpp rnd.cpp -o test_runner
+g++ -std=c++17 tests/test_basic.cpp rndCli.cpp rnd.cpp -o test_runner
 ./test_runner
 
 ---
