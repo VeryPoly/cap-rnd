@@ -256,6 +256,8 @@ Project Structure
 
 Development
 
+See [docs/DEVELOPER_GUIDE.md](docs/DEVELOPER_GUIDE.md) for architecture, design decisions, an API reference, common workflows, troubleshooting, and the contribution guide.
+
 Install pre-commit hooks:
 
 pip install pre-commit
