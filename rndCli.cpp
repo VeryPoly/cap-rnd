@@ -157,7 +157,7 @@ bool runIteration(rnd& simulator)
     constexpr int MAX_RETRIES = 100;
     int retryCount = 0;
 
-    bool retry;
+    bool retry = false;
 
     do
     {
