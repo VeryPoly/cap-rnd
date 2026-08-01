@@ -1,5 +1,7 @@
 #include "rnd.h"
 
+#include <cassert>
+
 long long rnd::safeAdd(long long a, long long b)
 {
     if (b > 0 && a > std::numeric_limits<long long>::max() - b)
@@ -17,6 +19,8 @@ long long rnd::safeAdd(long long a, long long b)
 
 long long rnd::safeMultiply(long long a, long long b)
 {
+    assert(a >= 0 && b >= 0);
+
     if (a == 0 || b == 0)
         return 0;
 
