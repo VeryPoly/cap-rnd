@@ -36,6 +36,7 @@ rnd::rnd(int p, int co, bool kg, unsigned int seed)
       successes(0),
       faults(0),
       fails(0),
+      costComputed(false),
       totalCost(0),
       grandTotalCost(0),
       multiplier(1),
@@ -118,6 +119,11 @@ void rnd::processRoll(int rollValue)
 
 rnd::CostOutcome rnd::cost()
 {
+    assert(!costComputed);
+    assert(successes >= REQUIRED_SUCCESSES || fails >= REQUIRED_FAILURES);
+
+    costComputed = true;
+
     bool success = successes >= REQUIRED_SUCCESSES;
     bool retry = success && (faults > 0 || fails > 0);
 
@@ -153,6 +159,7 @@ void rnd::reset()
     successes = 0;
     faults = 0;
     fails = 0;
+    costComputed = false;
     totalCost = 0;
 }
 
