@@ -13,6 +13,14 @@ void discardLine()
 {
     std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 }
+
+void warnIfClamped(int value, int min, int max, const char* label)
+{
+    if (value < min || value > max)
+    {
+        std::cout << label << " is clamped to the range [" << min << ", " << max << "].\n";
+    }
+}
 }  // namespace
 
 void promptInt(int& value, bool aboveZero)
@@ -83,21 +91,11 @@ SimConfig promptConfig()
 
     std::cout << "Prior: ";
     promptInt(config.prior, ANY_INTEGER);
-
-    if (config.prior < rnd::PRIOR_MIN || config.prior > rnd::PRIOR_MAX)
-    {
-        std::cout << "Prior is clamped to the range [" << rnd::PRIOR_MIN << ", " << rnd::PRIOR_MAX
-                  << "].\n";
-    }
+    warnIfClamped(config.prior, rnd::PRIOR_MIN, rnd::PRIOR_MAX, "Prior");
 
     std::cout << "Cost Offset: ";
     promptInt(config.costOffset, ANY_INTEGER);
-
-    if (config.costOffset < rnd::COST_OFFSET_MIN || config.costOffset > rnd::COST_OFFSET_MAX)
-    {
-        std::cout << "Cost Offset is clamped to the range [" << rnd::COST_OFFSET_MIN << ", "
-                  << rnd::COST_OFFSET_MAX << "].\n";
-    }
+    warnIfClamped(config.costOffset, rnd::COST_OFFSET_MIN, rnd::COST_OFFSET_MAX, "Cost Offset");
 
     std::cout << "Number of Rolls: ";
     promptInt(config.numRolls, ABOVE_ZERO);
