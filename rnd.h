@@ -64,10 +64,10 @@ public:
 
     rnd(int p, int co, bool kg, unsigned int seed = std::random_device{}());
 
-    bool roll();
+    [[nodiscard]] bool roll();
     void processRoll(int rollValue);
 
-    CostOutcome cost();
+    [[nodiscard]] CostOutcome cost();
 
     void reset();
     void incPrior();
@@ -77,14 +77,14 @@ public:
     void forceNextRoll(int rollValue);
 
     // Cumulative cost across every finalized iteration this session.
-    long long getGrandTotalCost() const;
+    [[nodiscard]] long long getGrandTotalCost() const;
 
     // Cost of the current (not-yet-finalized) attempt only.
-    long long getScaledCost() const;
+    [[nodiscard]] long long getScaledCost() const;
 
-    int getLastRoll() const;
+    [[nodiscard]] int getLastRoll() const;
 
-    int getSuccesses() const;
-    int getFaults() const;
-    int getFails() const;
+    [[nodiscard]] int getSuccesses() const;
+    [[nodiscard]] int getFaults() const;
+    [[nodiscard]] int getFails() const;
 };

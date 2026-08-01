@@ -15,7 +15,7 @@ int main()
 
         std::cout << "Run another simulation? (y/n): ";
 
-        bool continueProgram;
+        bool continueProgram = false;
         promptBool(continueProgram);
 
         if (!continueProgram)

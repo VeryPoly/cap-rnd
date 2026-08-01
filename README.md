@@ -35,7 +35,7 @@ No additional software is required.
 
 Building From Source
 
-- C++17 compatible compiler or newer
+- C++20 compatible compiler or newer
 
 Supported compilers:
 
@@ -117,15 +117,15 @@ Building From Source
 
 GCC
 
-g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic rnd.cpp rndCli.cpp rndMain.cpp -o rnd
+g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic rnd.cpp rndCli.cpp rndMain.cpp -o rnd
 
 Clang
 
-clang++ -std=c++17 -O2 -Wall -Wextra -Wpedantic rnd.cpp rndCli.cpp rndMain.cpp -o rnd
+clang++ -std=c++20 -O2 -Wall -Wextra -Wpedantic rnd.cpp rndCli.cpp rndMain.cpp -o rnd
 
 MSVC
 
-cl /std:c++17 /O2 rnd.cpp rndCli.cpp rndMain.cpp
+cl /std:c++20 /O2 rnd.cpp rndCli.cpp rndMain.cpp
 
 ---
 
@@ -267,7 +267,7 @@ Format source code:
 
 Run tests:
 
-g++ -std=c++17 tests/test_basic.cpp rndCli.cpp rnd.cpp -o test_runner
+g++ -std=c++20 tests/test_basic.cpp rndCli.cpp rnd.cpp -o test_runner
 ./test_runner
 
 ---
