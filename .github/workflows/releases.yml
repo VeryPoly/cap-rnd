@@ -11,37 +11,42 @@ permissions:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
       - name: Download Windows artifact
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@bf251b5aa9c2f7eeb574a96ee720e24f801b7c11 # v6
         with:
           workflow: build.yml
-          branch: main
+          commit: ${{ github.sha }}
           workflow_conclusion: success
           name: cap-rnd-win64
           path: cap-rnd-win64
 
       - name: Download Linux artifact
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@bf251b5aa9c2f7eeb574a96ee720e24f801b7c11 # v6
         with:
           workflow: build.yml
-          branch: main
+          commit: ${{ github.sha }}
           workflow_conclusion: success
           name: cap-rnd-linux-x64
           path: cap-rnd-linux-x64
 
       - name: Download macOS artifact
-        uses: dawidd6/action-download-artifact@v6
+        uses: dawidd6/action-download-artifact@bf251b5aa9c2f7eeb574a96ee720e24f801b7c11 # v6
         with:
           workflow: build.yml
-          branch: main
+          commit: ${{ github.sha }}
           workflow_conclusion: success
           name: cap-rnd-macos
           path: cap-rnd-macos
@@ -71,3 +76,13 @@ jobs:
             cap-rnd-linux-x64.tar.gz \
             cap-rnd-macos.tar.gz \
             > checksums.txt
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            cap-rnd-win64.zip
+            cap-rnd-linux-x64.tar.gz
+            cap-rnd-macos.tar.gz
+            checksums.txt

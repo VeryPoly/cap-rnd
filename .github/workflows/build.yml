@@ -16,8 +16,17 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+concurrency:
+  group: build-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   build:
+    timeout-minutes: 15
+
     strategy:
       fail-fast: false
 
@@ -51,31 +60,12 @@ jobs:
         run: |
           ${{ matrix.cxx }} --version
 
-      - name: Build application
-        run: >
-          ${{ matrix.cxx }}
-          -std=c++17
-          -O2
-          -Wall
-          -Wextra
-          -Wpedantic
-          rndMain.cpp
-          rnd.cpp
-          -o
-          ${{ matrix.output }}
-
-      - name: Build tests
-        run: >
-          ${{ matrix.cxx }}
-          -std=c++17
-          -O2
-          -Wall
-          -Wextra
-          -Wpedantic
-          tests/test_basic.cpp
-          rnd.cpp
-          -o
-          ${{ matrix.test_output }}
+      - name: Build application and tests
+        uses: ./.github/actions/build-and-test
+        with:
+          cxx: ${{ matrix.cxx }}
+          output: ${{ matrix.output }}
+          test-output: ${{ matrix.test_output }}
 
       - name: Run tests (Windows)
         if: runner.os == 'Windows'
@@ -131,3 +121,4 @@ jobs:
         with:
           name: ${{ matrix.artifact }}
           path: ${{ matrix.artifact }}
+          retention-days: 7

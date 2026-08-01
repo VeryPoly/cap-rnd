@@ -12,9 +12,17 @@ on:
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
 jobs:
   lint-and-test:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
 
     steps:
       - name: Checkout repository
@@ -39,40 +47,47 @@ jobs:
 
       - name: Verify formatting
         run: |
-          files=$(git ls-files '*.cpp' '*.h')
+          mapfile -t files < <(git ls-files '*.cpp' '*.h')
 
-          if [ -n "$files" ]; then
-            clang-format --dry-run --Werror $files
+          if [ ${#files[@]} -gt 0 ]; then
+            clang-format --dry-run --Werror "${files[@]}"
           fi
 
-      - name: Build application
-        run: |
-          g++ \
-            -std=c++17 \
-            -O2 \
-            -Wall \
-            -Wextra \
-            -Wpedantic \
-            rndMain.cpp \
-            rnd.cpp \
-            -o rnd
-
-      - name: Build tests
-        run: |
-          g++ \
-            -std=c++17 \
-            -O2 \
-            -Wall \
-            -Wextra \
-            -Wpedantic \
-            tests/test_basic.cpp \
-            rnd.cpp \
-            -o test_runner
+      - name: Build application and tests
+        uses: ./.github/actions/build-and-test
+        with:
+          cxx: g++
+          output: rnd
+          test-output: test_runner
 
       - name: Run tests
         run: |
           ./test_runner
 
       - name: Smoke test
+        run: |
+          printf "0\n0\n1\nn\nn\n" | ./rnd
+
+  sanitize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build with sanitizers
+        uses: ./.github/actions/build-and-test
+        with:
+          cxx: g++
+          output: rnd
+          test-output: test_runner
+          extra-flags: -fsanitize=address,undefined -fno-omit-frame-pointer -g
+
+      - name: Run tests under sanitizers
+        run: |
+          ./test_runner
+
+      - name: Smoke test under sanitizers
         run: |
           printf "0\n0\n1\nn\nn\n" | ./rnd
