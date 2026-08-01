@@ -30,7 +30,7 @@ long long rnd::safeMultiply(long long a, long long b)
     return a * b;
 }
 
-rnd::rnd(int p, int co, bool kg)
+rnd::rnd(int p, int co, bool kg, unsigned int seed)
     : prior(p),
       costOffset(co),
       successes(0),
@@ -40,7 +40,7 @@ rnd::rnd(int p, int co, bool kg)
       grandTotalCost(0),
       multiplier(1),
       keepGoing(kg),
-      rng(std::random_device{}())
+      rng(seed)
 {
     if (prior < -20)
         prior = -20;

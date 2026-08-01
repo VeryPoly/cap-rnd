@@ -36,7 +36,7 @@ private:
     static long long safeMultiply(long long a, long long b);
 
 public:
-    rnd(int p, int co, bool kg);
+    rnd(int p, int co, bool kg, unsigned int seed = std::random_device{}());
 
     bool roll();
     void processRoll(int rollValue);
