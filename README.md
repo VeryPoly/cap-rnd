@@ -47,7 +47,7 @@ Supported compilers:
 
 Installation
 
-Download the latest release from the repository's Releases page and extract the archive.
+Download the latest release from the [repository's Releases page](https://github.com/VeryPoly/cap-rnd/releases/latest) and extract the archive.
 
 No installation process is required.
 
@@ -59,7 +59,7 @@ Usage
 
 1. Download:
 
-cap-rnd-win64.zip
+[cap-rnd-win64.zip](https://github.com/VeryPoly/cap-rnd/releases/latest/download/cap-rnd-win64.zip)
 
 2. Extract the archive.
 
@@ -75,7 +75,7 @@ Usage
 
 1. Download:
 
-cap-rnd-linux-x64.tar.gz
+[cap-rnd-linux-x64.tar.gz](https://github.com/VeryPoly/cap-rnd/releases/latest/download/cap-rnd-linux-x64.tar.gz)
 
 2. Extract:
 
@@ -99,7 +99,7 @@ Usage
 
 1. Download:
 
-cap-rnd-macos.tar.gz
+[cap-rnd-macos.tar.gz](https://github.com/VeryPoly/cap-rnd/releases/latest/download/cap-rnd-macos.tar.gz)
 
 2. Extract:
 
