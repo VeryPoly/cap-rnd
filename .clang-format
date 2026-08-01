@@ -16,7 +16,9 @@ AllowShortFunctionsOnASingleLine: Empty
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false
 
-BreakBeforeBraces: Attach
+BreakBeforeBraces: Allman
+
+AccessModifierOffset: -4
 
 SpaceBeforeParens: ControlStatements
 

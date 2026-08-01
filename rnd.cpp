@@ -2,14 +2,12 @@
 
 long long rnd::safeAdd(long long a, long long b)
 {
-    if (b > 0 &&
-        a > std::numeric_limits<long long>::max() - b)
+    if (b > 0 && a > std::numeric_limits<long long>::max() - b)
     {
         return std::numeric_limits<long long>::max();
     }
 
-    if (b < 0 &&
-        a < std::numeric_limits<long long>::min() - b)
+    if (b < 0 && a < std::numeric_limits<long long>::min() - b)
     {
         return std::numeric_limits<long long>::min();
     }
@@ -71,8 +69,7 @@ bool rnd::roll()
 
     lastRoll = rollValue;
 
-    return successes >= REQUIRED_SUCCESSES
-        || fails >= REQUIRED_FAILURES;
+    return successes >= REQUIRED_SUCCESSES || fails >= REQUIRED_FAILURES;
 }
 
 void rnd::processRoll(int rollValue)
@@ -108,12 +105,9 @@ void rnd::processRoll(int rollValue)
 
 rnd::CostOutcome rnd::cost()
 {
-    bool success =
-        successes >= REQUIRED_SUCCESSES;
+    bool success = successes >= REQUIRED_SUCCESSES;
 
-    bool retry =
-        success &&
-        (faults > 0 || fails > 0);
+    bool retry = success && (faults > 0 || fails > 0);
 
     if (retry)
     {
@@ -122,8 +116,7 @@ rnd::CostOutcome rnd::cost()
 
     if (success)
     {
-        grandTotalCost =
-            safeAdd(grandTotalCost, totalCost);
+        grandTotalCost = safeAdd(grandTotalCost, totalCost);
 
         return CostOutcome::Success;
     }
@@ -133,8 +126,7 @@ rnd::CostOutcome rnd::cost()
         return CostOutcome::RetryFailure;
     }
 
-    grandTotalCost =
-        safeAdd(grandTotalCost, totalCost);
+    grandTotalCost = safeAdd(grandTotalCost, totalCost);
 
     return CostOutcome::GiveUpFailure;
 }
