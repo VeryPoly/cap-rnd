@@ -32,7 +32,8 @@ categories:
   - title: '⚙️ CI/CD'
     labels:
       - ci
-      - github-actions
+      - github_actions
+      - dependencies
 
   - title: '🔧 Maintenance'
     labels:
@@ -61,26 +62,26 @@ version-resolver:
       - test
       - tests
       - ci
-      - github-actions
+      - github_actions
+      - dependencies
       - maintenance
       - refactor
 
   default: patch
 
+# No file-pattern rule maps to feature/enhancement - touching *.cpp/*.h
+# doesn't reliably signal new-feature intent (a bug fix or refactor
+# touches the same files), and that label drives a minor version bump.
+# Apply feature/enhancement manually when a PR genuinely adds one.
 autolabeler:
   - label: documentation
     files:
       - '*.md'
 
-  - label: github-actions
+  - label: github_actions
     files:
       - '.github/**/*'
 
   - label: test
     files:
       - 'tests/**/*'
-
-  - label: enhancement
-    files:
-      - '*.cpp'
-      - '*.h'
