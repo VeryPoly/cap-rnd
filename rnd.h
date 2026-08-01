@@ -28,6 +28,10 @@ private:
     int faults;
     int fails;
 
+    // Guards cost() against being called twice on the same un-reset
+    // attempt, which would double-count totalCost into grandTotalCost.
+    bool costComputed;
+
     long long totalCost;
     long long grandTotalCost;
 
