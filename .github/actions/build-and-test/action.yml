@@ -33,6 +33,7 @@ runs:
           -Wpedantic \
           ${{ inputs.extra-flags }} \
           rndMain.cpp \
+          rndCli.cpp \
           rnd.cpp \
           -o ${{ inputs.output }}
 
@@ -47,5 +48,6 @@ runs:
           -Wpedantic \
           ${{ inputs.extra-flags }} \
           tests/test_basic.cpp \
+          rndCli.cpp \
           rnd.cpp \
           -o ${{ inputs.test-output }}

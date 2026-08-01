@@ -32,19 +32,19 @@ jobs:
 
       matrix:
         include:
-          - os: windows-latest
+          - os: windows-2022
             artifact: cap-rnd-win64
             output: rnd.exe
             test_output: test_runner.exe
             cxx: g++
 
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             artifact: cap-rnd-linux-x64
             output: rnd
             test_output: test_runner
             cxx: g++
 
-          - os: macos-latest
+          - os: macos-14
             artifact: cap-rnd-macos
             output: rnd
             test_output: test_runner

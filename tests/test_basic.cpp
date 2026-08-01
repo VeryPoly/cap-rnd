@@ -1,4 +1,5 @@
 #include "../rnd.h"
+#include "../rndCli.h"
 
 #include <cassert>
 #include <iostream>
@@ -144,7 +145,8 @@ static void testRollReturnsTrueOnceSuccessThresholdReached()
     sim.processRoll(18);
     assert(sim.getSuccesses() == 3);
 
-    assert(sim.roll() == true);
+    bool complete = sim.roll();
+    assert(complete == true);
 }
 
 static void testRollReturnsTrueOnceFailThresholdReached()
@@ -156,7 +158,8 @@ static void testRollReturnsTrueOnceFailThresholdReached()
     sim.processRoll(6);
     assert(sim.getFails() == 3);
 
-    assert(sim.roll() == true);
+    bool complete = sim.roll();
+    assert(complete == true);
 }
 
 static void testCostSuccessWithoutFaultFinalizes()
@@ -167,7 +170,8 @@ static void testCostSuccessWithoutFaultFinalizes()
     sim.processRoll(18);
     sim.processRoll(18);
 
-    assert(sim.cost() == rnd::CostOutcome::Success);
+    rnd::CostOutcome outcome = sim.cost();
+    assert(outcome == rnd::CostOutcome::Success);
     assert(sim.getGrandTotalCost() > 0);
 }
 
@@ -179,7 +183,8 @@ static void testCostSuccessWithFaultRetries()
     sim.processRoll(14);
     sim.processRoll(14);
 
-    assert(sim.cost() == rnd::CostOutcome::RetrySuccess);
+    rnd::CostOutcome outcome = sim.cost();
+    assert(outcome == rnd::CostOutcome::RetrySuccess);
     assert(sim.getGrandTotalCost() == 0);
 }
 
@@ -191,7 +196,8 @@ static void testCostFailureKeepGoingRetries()
     sim.processRoll(6);
     sim.processRoll(6);
 
-    assert(sim.cost() == rnd::CostOutcome::RetryFailure);
+    rnd::CostOutcome outcome = sim.cost();
+    assert(outcome == rnd::CostOutcome::RetryFailure);
     assert(sim.getGrandTotalCost() == 0);
 }
 
@@ -203,8 +209,95 @@ static void testCostFailureNoKeepGoingFinalizes()
     sim.processRoll(6);
     sim.processRoll(6);
 
-    assert(sim.cost() == rnd::CostOutcome::GiveUpFailure);
+    rnd::CostOutcome outcome = sim.cost();
+    assert(outcome == rnd::CostOutcome::GiveUpFailure);
     assert(sim.getGrandTotalCost() > 0);
+}
+
+static void testRunRollSequenceReturnsTrueWhenAlreadyAtThreshold()
+{
+    rnd sim(0, 0, false, 1);
+
+    sim.processRoll(18);
+    sim.processRoll(18);
+    sim.processRoll(18);
+    assert(sim.getSuccesses() == 3);
+
+    bool complete = runRollSequence(sim);
+    assert(complete == true);
+}
+
+static void testReportCostSuccessNoFault()
+{
+    rnd sim(0, 0, false, 1);
+
+    sim.processRoll(18);
+    sim.processRoll(18);
+    sim.processRoll(18);
+
+    rnd::CostOutcome outcome = reportCost(sim);
+    assert(outcome == rnd::CostOutcome::Success);
+}
+
+static void testReportCostRetrySuccess()
+{
+    rnd sim(0, 0, false, 1);
+
+    sim.processRoll(14);
+    sim.processRoll(14);
+    sim.processRoll(14);
+
+    rnd::CostOutcome outcome = reportCost(sim);
+    assert(outcome == rnd::CostOutcome::RetrySuccess);
+}
+
+static void testReportCostRetryFailure()
+{
+    rnd sim(0, 0, true, 1);
+
+    sim.processRoll(6);
+    sim.processRoll(6);
+    sim.processRoll(6);
+
+    rnd::CostOutcome outcome = reportCost(sim);
+    assert(outcome == rnd::CostOutcome::RetryFailure);
+}
+
+static void testReportCostGiveUpFailure()
+{
+    rnd sim(0, 0, false, 1);
+
+    sim.processRoll(6);
+    sim.processRoll(6);
+    sim.processRoll(6);
+
+    rnd::CostOutcome outcome = reportCost(sim);
+    assert(outcome == rnd::CostOutcome::GiveUpFailure);
+}
+
+static void testRunSessionZeroRollsCompletesImmediately()
+{
+    SimConfig config{0, 0, 0, false};
+
+    bool completed = runSession(config);
+    assert(completed == true);
+}
+
+static void testRunIterationCompletesWithoutHanging()
+{
+    // runIteration always calls the real RNG at least once (via
+    // runRollSequence's do-while), so unlike the tests above this can't be
+    // made fully deterministic without a way to inject a fake roll sequence.
+    // This just verifies it terminates (bounded by MAX_RETRIES/safetyCounter)
+    // and leaves the simulator in a valid, readable state - a real assertion
+    // where previously there was none at all.
+    rnd sim(0, 0, true, 1);
+
+    bool completed = runIteration(sim);
+
+    assert(sim.getSuccesses() >= 0);
+    assert(sim.getFails() >= 0);
+    (void)completed;
 }
 
 int main()
@@ -229,6 +322,16 @@ int main()
     testCostSuccessWithFaultRetries();
     testCostFailureKeepGoingRetries();
     testCostFailureNoKeepGoingFinalizes();
+
+    testRunRollSequenceReturnsTrueWhenAlreadyAtThreshold();
+
+    testReportCostSuccessNoFault();
+    testReportCostRetrySuccess();
+    testReportCostRetryFailure();
+    testReportCostGiveUpFailure();
+
+    testRunSessionZeroRollsCompletesImmediately();
+    testRunIterationCompletesWithoutHanging();
 
     std::cout << "All tests passed.\n";
 
