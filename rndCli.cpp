@@ -76,8 +76,20 @@ SimConfig promptConfig()
     std::cout << "Prior: ";
     promptInt(config.prior, ANY_INTEGER);
 
+    if (config.prior < rnd::PRIOR_MIN || config.prior > rnd::PRIOR_MAX)
+    {
+        std::cout << "Prior is clamped to the range [" << rnd::PRIOR_MIN << ", " << rnd::PRIOR_MAX
+                  << "].\n";
+    }
+
     std::cout << "Cost Offset: ";
     promptInt(config.costOffset, ANY_INTEGER);
+
+    if (config.costOffset < rnd::COST_OFFSET_MIN || config.costOffset > rnd::COST_OFFSET_MAX)
+    {
+        std::cout << "Cost Offset is clamped to the range [" << rnd::COST_OFFSET_MIN << ", "
+                  << rnd::COST_OFFSET_MAX << "].\n";
+    }
 
     std::cout << "Number of Rolls: ";
     promptInt(config.numRolls, ABOVE_ZERO);
@@ -131,7 +143,8 @@ rnd::CostOutcome reportCost(rnd& simulator)
             std::cout << " success.\n\n";
             break;
 
-        default:
+        case rnd::CostOutcome::RetryFailure:
+        case rnd::CostOutcome::GiveUpFailure:
             std::cout << " failed.\n\n";
             break;
     }

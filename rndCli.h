@@ -16,6 +16,11 @@ struct SimConfig
 SimConfig promptConfig();
 
 bool runRollSequence(rnd& simulator);
+
+// Not a pure report: also drives the cost() state transition
+// (finalizes grandTotalCost on Success/GiveUpFailure) as a side effect,
+// in addition to printing the outcome.
 rnd::CostOutcome reportCost(rnd& simulator);
+
 bool runIteration(rnd& simulator);
 bool runSession(const SimConfig& config);
