@@ -83,140 +83,178 @@ void promptBool(bool* result)
     }
 }
 
+struct SimConfig
+{
+    int prior;
+    int costOffset;
+    int numRolls;
+    bool keepGoing;
+};
+
+SimConfig promptConfig()
+{
+    SimConfig config;
+
+    std::cout << "Prior: ";
+    promptInt(&config.prior, ANY_INTEGER);
+
+    std::cout << "Cost Offset: ";
+    promptInt(&config.costOffset, ANY_INTEGER);
+
+    std::cout << "Number of Rolls: ";
+    promptInt(&config.numRolls, ABOVE_ZERO);
+
+    std::cout
+        << "Keep Going if failed? (y/n): ";
+    promptBool(&config.keepGoing);
+
+    return config;
+}
+
+bool runRollSequence(rnd& simulator)
+{
+    int safetyCounter = 1000;
+
+    for (;;)
+    {
+        bool complete = simulator.roll();
+
+        std::cout
+            << simulator.getLastRoll()
+            << ' ';
+
+        if (complete)
+            return true;
+
+        if (--safetyCounter <= 0)
+            return false;
+    }
+}
+
+rnd::CostOutcome reportCost(rnd& simulator)
+{
+    rnd::CostOutcome outcome = simulator.cost();
+
+    bool succeeded =
+        outcome == rnd::CostOutcome::RetrySuccess
+        || outcome == rnd::CostOutcome::Success;
+
+    if (succeeded)
+    {
+        std::cout
+            << "\nFaults: "
+            << simulator.getFaults()
+            << ", "
+            << simulator.getFails()
+            << " crit faults\n";
+    }
+
+    std::cout
+        << "Total cost: "
+        << simulator.getScaledCost();
+
+    switch (outcome)
+    {
+        case rnd::CostOutcome::RetrySuccess:
+            std::cout
+                << " success, redoing to remove fault.\n\n";
+            break;
+
+        case rnd::CostOutcome::Success:
+            std::cout
+                << " success.\n\n";
+            break;
+
+        default:
+            std::cout
+                << " failed.\n\n";
+            break;
+    }
+
+    return outcome;
+}
+
+bool runIteration(rnd& simulator)
+{
+    constexpr int MAX_RETRIES = 100;
+    int retryCount = 0;
+
+    bool retry;
+
+    do
+    {
+        if (!runRollSequence(simulator))
+        {
+            std::cerr
+                << "Safety limit exceeded.\n";
+            return false;
+        }
+
+        rnd::CostOutcome outcome = reportCost(simulator);
+
+        retry =
+            outcome == rnd::CostOutcome::RetrySuccess
+            || outcome == rnd::CostOutcome::RetryFailure;
+
+        simulator.reset();
+
+        if (retry)
+        {
+            ++retryCount;
+
+            if (retryCount >= MAX_RETRIES)
+            {
+                std::cerr
+                    << "Retry limit exceeded.\n";
+                return false;
+            }
+        }
+
+    } while (retry);
+
+    simulator.incPrior();
+
+    return true;
+}
+
+bool runSession(const SimConfig& config)
+{
+    rnd simulator(
+        config.prior,
+        config.costOffset,
+        config.keepGoing);
+
+    int completed = 0;
+
+    while (completed < config.numRolls)
+    {
+        if (!runIteration(simulator))
+            return false;
+
+        ++completed;
+    }
+
+    std::cout
+        << "Grand total cost across all iterations: "
+        << simulator.getGrandTotalCost()
+        << "\n\n";
+
+    return true;
+}
+
 int main()
 {
     while (true)
     {
-        int prior;
-        int costOffset;
-        int numRolls;
+        SimConfig config = promptConfig();
 
-        bool keepGoing;
-        bool continueProgram;
-
-        std::cout << "Prior: ";
-        promptInt(&prior, ANY_INTEGER);
-
-        std::cout << "Cost Offset: ";
-        promptInt(&costOffset, ANY_INTEGER);
-
-        std::cout << "Number of Rolls: ";
-        promptInt(&numRolls, ABOVE_ZERO);
-
-        std::cout
-            << "Keep Going if failed? (y/n): ";
-        promptBool(&keepGoing);
-
-        rnd simulator(
-            prior,
-            costOffset,
-            keepGoing);
-
-        int completed = 0;
-
-        while (completed < numRolls)
-        {
-            constexpr int MAX_RETRIES = 100;
-            int retryCount = 0;
-
-            bool retry;
-
-            do
-            {
-                int safetyCounter = 1000;
-
-                for (;;)
-                {
-                    bool complete = simulator.roll();
-
-                    std::cout
-                        << simulator.getLastRoll()
-                        << ' ';
-
-                    if (complete)
-                        break;
-
-                    if (--safetyCounter <= 0)
-                        break;
-                }
-
-                if (safetyCounter <= 0)
-                {
-                    std::cerr
-                        << "Safety limit exceeded.\n";
-                    return 1;
-                }
-
-                rnd::CostOutcome outcome = simulator.cost();
-
-                bool succeeded =
-                    outcome == rnd::CostOutcome::RetrySuccess
-                    || outcome == rnd::CostOutcome::Success;
-
-                if (succeeded)
-                {
-                    std::cout
-                        << "\nFaults: "
-                        << simulator.getFaults()
-                        << ", "
-                        << simulator.getFails()
-                        << " crit faults\n";
-                }
-
-                std::cout
-                    << "Total cost: "
-                    << simulator.getScaledCost();
-
-                switch (outcome)
-                {
-                    case rnd::CostOutcome::RetrySuccess:
-                        std::cout
-                            << " success, redoing to remove fault.\n\n";
-                        break;
-
-                    case rnd::CostOutcome::Success:
-                        std::cout
-                            << " success.\n\n";
-                        break;
-
-                    default:
-                        std::cout
-                            << " failed.\n\n";
-                        break;
-                }
-
-                retry =
-                    outcome == rnd::CostOutcome::RetrySuccess
-                    || outcome == rnd::CostOutcome::RetryFailure;
-
-                simulator.reset();
-
-                if (retry)
-                {
-                    ++retryCount;
-
-                    if (retryCount >= MAX_RETRIES)
-                    {
-                        std::cerr
-                            << "Retry limit exceeded.\n";
-                        return 1;
-                    }
-                }
-
-            } while (retry);
-
-            simulator.incPrior();
-            ++completed;
-        }
-
-        std::cout
-            << "Grand total cost across all iterations: "
-            << simulator.getGrandTotalCost()
-            << "\n\n";
+        if (!runSession(config))
+            return 1;
 
         std::cout
             << "Run another simulation? (y/n): ";
 
+        bool continueProgram;
         promptBool(&continueProgram);
 
         if (!continueProgram)
