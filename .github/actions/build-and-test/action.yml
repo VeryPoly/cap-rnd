@@ -1,0 +1,51 @@
+name: Build and test cap-rnd
+description: Compiles the cap-rnd application and test binaries with the project's standard warning flags.
+
+inputs:
+  cxx:
+    description: Compiler command to invoke (e.g. g++ or clang++)
+    required: true
+
+  output:
+    description: Output filename for the application binary
+    required: true
+
+  test-output:
+    description: Output filename for the test binary
+    required: true
+
+  extra-flags:
+    description: Additional compiler flags (e.g. sanitizer flags)
+    required: false
+    default: ''
+
+runs:
+  using: composite
+  steps:
+    - name: Build application
+      shell: bash
+      run: |
+        ${{ inputs.cxx }} \
+          -std=c++17 \
+          -O2 \
+          -Wall \
+          -Wextra \
+          -Wpedantic \
+          ${{ inputs.extra-flags }} \
+          rndMain.cpp \
+          rnd.cpp \
+          -o ${{ inputs.output }}
+
+    - name: Build tests
+      shell: bash
+      run: |
+        ${{ inputs.cxx }} \
+          -std=c++17 \
+          -O2 \
+          -Wall \
+          -Wextra \
+          -Wpedantic \
+          ${{ inputs.extra-flags }} \
+          tests/test_basic.cpp \
+          rnd.cpp \
+          -o ${{ inputs.test-output }}
