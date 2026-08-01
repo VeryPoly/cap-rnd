@@ -16,6 +16,10 @@ private:
     static constexpr int REQUIRED_SUCCESSES = 3;
     static constexpr int REQUIRED_FAILURES = 3;
 
+    // Escalation cap for incPrior(), distinct from the constructor's
+    // wider [-20, 20] clamp on the initial prior.
+    static constexpr int MAX_ESCALATED_PRIOR = 7;
+
     int prior;
     int costOffset;
 
@@ -30,23 +34,36 @@ private:
 
     bool keepGoing;
 
+    int lastRoll;
+
     std::mt19937 rng;
 
     static long long safeAdd(long long a, long long b);
     static long long safeMultiply(long long a, long long b);
 
 public:
-    rnd(int p, int co, bool kg);
+    enum class CostOutcome
+    {
+        RetrySuccess,
+        Success,
+        RetryFailure,
+        GiveUpFailure
+    };
+
+    rnd(int p, int co, bool kg, unsigned int seed = std::random_device{}());
 
     bool roll();
     void processRoll(int rollValue);
 
-    bool cost();
+    CostOutcome cost();
 
     void reset();
     void incPrior();
 
     long long getGrandTotalCost() const;
+    long long getScaledCost() const;
+
+    int getLastRoll() const;
 
     int getSuccesses() const;
     int getFaults() const;
