@@ -70,4 +70,4 @@ jobs:
             cap-rnd-win64.zip \
             cap-rnd-linux-x64.tar.gz \
             cap-rnd-macos.tar.gz \
-            >
+            > checksums.txt
