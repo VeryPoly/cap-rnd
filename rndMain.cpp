@@ -1,11 +1,11 @@
 #include "rndCli.h"
 
-#include <chrono>
 #include <iostream>
-#include <thread>
 
 int main()
 {
+    std::ios::sync_with_stdio(false);
+
     while (true)
     {
         SimConfig config = promptConfig();
@@ -20,8 +20,6 @@ int main()
 
         if (!continueProgram)
             break;
-
-        std::this_thread::sleep_for(std::chrono::seconds(1));
     }
 
     return 0;
