@@ -1,17 +1,13 @@
 #include "rnd.h"
 
-#include <iostream>
-
 long long rnd::safeAdd(long long a, long long b)
 {
-    if (b > 0 &&
-        a > std::numeric_limits<long long>::max() - b)
+    if (b > 0 && a > std::numeric_limits<long long>::max() - b)
     {
         return std::numeric_limits<long long>::max();
     }
 
-    if (b < 0 &&
-        a < std::numeric_limits<long long>::min() - b)
+    if (b < 0 && a < std::numeric_limits<long long>::min() - b)
     {
         return std::numeric_limits<long long>::min();
     }
@@ -30,7 +26,7 @@ long long rnd::safeMultiply(long long a, long long b)
     return a * b;
 }
 
-rnd::rnd(int p, int co, bool kg)
+rnd::rnd(int p, int co, bool kg, unsigned int seed)
     : prior(p),
       costOffset(co),
       successes(0),
@@ -40,7 +36,8 @@ rnd::rnd(int p, int co, bool kg)
       grandTotalCost(0),
       multiplier(1),
       keepGoing(kg),
-      rng(std::random_device{}())
+      lastRoll(0),
+      rng(seed)
 {
     if (prior < -20)
         prior = -20;
@@ -70,10 +67,9 @@ bool rnd::roll()
 
     processRoll(rollValue);
 
-    std::cout << rollValue << ' ';
+    lastRoll = rollValue;
 
-    return successes >= REQUIRED_SUCCESSES
-        || fails >= REQUIRED_FAILURES;
+    return successes >= REQUIRED_SUCCESSES || fails >= REQUIRED_FAILURES;
 }
 
 void rnd::processRoll(int rollValue)
@@ -107,63 +103,32 @@ void rnd::processRoll(int rollValue)
     }
 }
 
-bool rnd::cost()
+rnd::CostOutcome rnd::cost()
 {
-    bool success =
-        successes >= REQUIRED_SUCCESSES;
+    bool success = successes >= REQUIRED_SUCCESSES;
 
-    bool retry =
-        success &&
-        (faults > 0 || fails > 0);
-
-    long long scaledCost =
-        safeMultiply(totalCost, multiplier);
-
-    if (fails < REQUIRED_FAILURES)
-    {
-        std::cout
-            << "\nFaults: "
-            << faults
-            << ", "
-            << fails
-            << " crit faults\n";
-    }
-
-    std::cout
-        << "Total cost: "
-        << scaledCost;
+    bool retry = success && (faults > 0 || fails > 0);
 
     if (retry)
     {
-        std::cout
-            << " success, redoing to remove fault.\n\n";
-
-        return true;
+        return CostOutcome::RetrySuccess;
     }
 
     if (success)
     {
-        grandTotalCost =
-            safeAdd(grandTotalCost, totalCost);
+        grandTotalCost = safeAdd(grandTotalCost, totalCost);
 
-        std::cout
-            << " success.\n\n";
-
-        return false;
+        return CostOutcome::Success;
     }
-
-    std::cout
-        << " failed.\n\n";
 
     if (keepGoing)
     {
-        return true;
+        return CostOutcome::RetryFailure;
     }
 
-    grandTotalCost =
-        safeAdd(grandTotalCost, totalCost);
+    grandTotalCost = safeAdd(grandTotalCost, totalCost);
 
-    return false;
+    return CostOutcome::GiveUpFailure;
 }
 
 void rnd::reset()
@@ -176,7 +141,7 @@ void rnd::reset()
 
 void rnd::incPrior()
 {
-    if (prior < 7)
+    if (prior < MAX_ESCALATED_PRIOR)
     {
         ++prior;
     }
@@ -185,6 +150,16 @@ void rnd::incPrior()
 long long rnd::getGrandTotalCost() const
 {
     return safeMultiply(grandTotalCost, multiplier);
+}
+
+long long rnd::getScaledCost() const
+{
+    return safeMultiply(totalCost, multiplier);
+}
+
+int rnd::getLastRoll() const
+{
+    return lastRoll;
 }
 
 int rnd::getSuccesses() const

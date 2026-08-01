@@ -61,6 +61,152 @@ static void testMultipleResets()
     }
 }
 
+static void testProcessRollPerfectSuccess()
+{
+    rnd sim(0, 0, false, 1);
+
+    sim.processRoll(23);
+
+    assert(sim.getSuccesses() == 3);
+    assert(sim.getFaults() == 0);
+    assert(sim.getFails() == 0);
+}
+
+static void testProcessRollSuccessBoundaries()
+{
+    rnd simLow(0, 0, false, 1);
+    simLow.processRoll(18);
+    assert(simLow.getSuccesses() == 1);
+    assert(simLow.getFaults() == 0);
+
+    rnd simHigh(0, 0, false, 1);
+    simHigh.processRoll(22);
+    assert(simHigh.getSuccesses() == 1);
+    assert(simHigh.getFaults() == 0);
+}
+
+static void testProcessRollSuccessWithFaultBoundaries()
+{
+    rnd simLow(0, 0, false, 1);
+    simLow.processRoll(14);
+    assert(simLow.getSuccesses() == 1);
+    assert(simLow.getFaults() == 1);
+
+    rnd simHigh(0, 0, false, 1);
+    simHigh.processRoll(17);
+    assert(simHigh.getSuccesses() == 1);
+    assert(simHigh.getFaults() == 1);
+}
+
+static void testProcessRollNeutralBoundaries()
+{
+    rnd simLow(0, 0, false, 1);
+    simLow.processRoll(7);
+    assert(simLow.getSuccesses() == 0);
+    assert(simLow.getFaults() == 0);
+    assert(simLow.getFails() == 0);
+
+    rnd simHigh(0, 0, false, 1);
+    simHigh.processRoll(13);
+    assert(simHigh.getSuccesses() == 0);
+    assert(simHigh.getFaults() == 0);
+    assert(simHigh.getFails() == 0);
+}
+
+static void testProcessRollCriticalFailure()
+{
+    rnd sim(0, 0, false, 1);
+
+    sim.processRoll(6);
+    assert(sim.getFails() == 1);
+
+    sim.processRoll(1);
+    assert(sim.getFails() == 2);
+}
+
+static void testProcessRollAccumulatesToThreshold()
+{
+    rnd sim(0, 0, false, 1);
+
+    sim.processRoll(18);
+    sim.processRoll(18);
+    sim.processRoll(18);
+
+    assert(sim.getSuccesses() == 3);
+}
+
+static void testRollReturnsTrueOnceSuccessThresholdReached()
+{
+    rnd sim(0, 0, false, 1);
+
+    sim.processRoll(18);
+    sim.processRoll(18);
+    sim.processRoll(18);
+    assert(sim.getSuccesses() == 3);
+
+    assert(sim.roll() == true);
+}
+
+static void testRollReturnsTrueOnceFailThresholdReached()
+{
+    rnd sim(0, 0, false, 1);
+
+    sim.processRoll(6);
+    sim.processRoll(6);
+    sim.processRoll(6);
+    assert(sim.getFails() == 3);
+
+    assert(sim.roll() == true);
+}
+
+static void testCostSuccessWithoutFaultFinalizes()
+{
+    rnd sim(0, 0, false, 1);
+
+    sim.processRoll(18);
+    sim.processRoll(18);
+    sim.processRoll(18);
+
+    assert(sim.cost() == rnd::CostOutcome::Success);
+    assert(sim.getGrandTotalCost() > 0);
+}
+
+static void testCostSuccessWithFaultRetries()
+{
+    rnd sim(0, 0, false, 1);
+
+    sim.processRoll(14);
+    sim.processRoll(14);
+    sim.processRoll(14);
+
+    assert(sim.cost() == rnd::CostOutcome::RetrySuccess);
+    assert(sim.getGrandTotalCost() == 0);
+}
+
+static void testCostFailureKeepGoingRetries()
+{
+    rnd sim(0, 0, true, 1);
+
+    sim.processRoll(6);
+    sim.processRoll(6);
+    sim.processRoll(6);
+
+    assert(sim.cost() == rnd::CostOutcome::RetryFailure);
+    assert(sim.getGrandTotalCost() == 0);
+}
+
+static void testCostFailureNoKeepGoingFinalizes()
+{
+    rnd sim(0, 0, false, 1);
+
+    sim.processRoll(6);
+    sim.processRoll(6);
+    sim.processRoll(6);
+
+    assert(sim.cost() == rnd::CostOutcome::GiveUpFailure);
+    assert(sim.getGrandTotalCost() > 0);
+}
+
 int main()
 {
     testConstructor();
@@ -68,6 +214,21 @@ int main()
     testPriorIncrement();
     testLargeConstructorValues();
     testMultipleResets();
+
+    testProcessRollPerfectSuccess();
+    testProcessRollSuccessBoundaries();
+    testProcessRollSuccessWithFaultBoundaries();
+    testProcessRollNeutralBoundaries();
+    testProcessRollCriticalFailure();
+    testProcessRollAccumulatesToThreshold();
+
+    testRollReturnsTrueOnceSuccessThresholdReached();
+    testRollReturnsTrueOnceFailThresholdReached();
+
+    testCostSuccessWithoutFaultFinalizes();
+    testCostSuccessWithFaultRetries();
+    testCostFailureKeepGoingRetries();
+    testCostFailureNoKeepGoingFinalizes();
 
     std::cout << "All tests passed.\n";
 
