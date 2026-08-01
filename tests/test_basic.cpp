@@ -3,6 +3,8 @@
 
 #include <cassert>
 #include <iostream>
+#include <sstream>
+#include <string>
 
 static void testConstructor()
 {
@@ -39,13 +41,59 @@ static void testPriorIncrement()
     assert(sim.getGrandTotalCost() == 0);
 }
 
-static void testLargeConstructorValues()
+// prior/costOffset aren't directly readable, so clamping is verified by
+// comparing an out-of-range constructor against the boundary value it
+// should clamp to: same seed => same rng draws => identical observable
+// state if (and only if) both actually clamp to the same value.
+static void testConstructorClampsPriorToMax()
 {
-    rnd simPositive(1000000, 1000000, false);
-    rnd simNegative(-1000000, -1000000, false);
+    rnd simClamped(1000000, 0, false, 42);
+    rnd simExplicit(rnd::PRIOR_MAX, 0, false, 42);
 
-    assert(simPositive.getGrandTotalCost() == 0);
-    assert(simNegative.getGrandTotalCost() == 0);
+    bool completeClamped = simClamped.roll();
+    bool completeExplicit = simExplicit.roll();
+
+    assert(simClamped.getLastRoll() == simExplicit.getLastRoll());
+    assert(simClamped.getSuccesses() == simExplicit.getSuccesses());
+    assert(simClamped.getFails() == simExplicit.getFails());
+    assert(completeClamped == completeExplicit);
+}
+
+static void testConstructorClampsPriorToMin()
+{
+    rnd simClamped(-1000000, 0, false, 42);
+    rnd simExplicit(rnd::PRIOR_MIN, 0, false, 42);
+
+    bool completeClamped = simClamped.roll();
+    bool completeExplicit = simExplicit.roll();
+
+    assert(simClamped.getLastRoll() == simExplicit.getLastRoll());
+    assert(simClamped.getSuccesses() == simExplicit.getSuccesses());
+    assert(simClamped.getFails() == simExplicit.getFails());
+    assert(completeClamped == completeExplicit);
+}
+
+static void testConstructorClampsCostOffsetToMax()
+{
+    rnd simClamped(0, 1000000, false, 42);
+    rnd simExplicit(0, rnd::COST_OFFSET_MAX, false, 42);
+
+    simClamped.processRoll(10);
+    simExplicit.processRoll(10);
+
+    assert(simClamped.getScaledCost() == simExplicit.getScaledCost());
+    assert(simClamped.getScaledCost() > 0);
+}
+
+static void testConstructorClampsCostOffsetToMin()
+{
+    rnd simClamped(0, -1000000, false, 42);
+    rnd simExplicit(0, rnd::COST_OFFSET_MIN, false, 42);
+
+    simClamped.processRoll(10);
+    simExplicit.processRoll(10);
+
+    assert(simClamped.getScaledCost() == simExplicit.getScaledCost());
 }
 
 static void testMultipleResets()
@@ -91,6 +139,16 @@ static void testProcessRollBoundaries()
         assert(sim.getFaults() == c.expectedFaults);
         assert(sim.getFails() == c.expectedFails);
     }
+}
+
+static void testProcessRollPerfectSuccessCapsRatherThanAdds()
+{
+    rnd sim(0, 0, false, 1);
+
+    sim.processRoll(18);  // successes = 1
+    sim.processRoll(23);  // PERFECT_SUCCESS sets successes = 3, not 1 + 3
+
+    assert(sim.getSuccesses() == 3);
 }
 
 static void testProcessRollCriticalFailure()
@@ -171,6 +229,23 @@ static void testCostOutcomes()
     }
 }
 
+// Every COST_OUTCOME_CASES row drives faults>0 via SUCCESS_WITH_FAULT
+// rolls; this covers the other side of retry's "faults > 0 || fails > 0" -
+// a crit failure earlier in the same attempt, followed by enough plain
+// successes to still reach the success threshold.
+static void testCostOutcomeRetrySuccessViaFailsNotFaults()
+{
+    rnd sim(0, 0, false, 1);
+
+    sim.processRoll(6);   // fails = 1
+    sim.processRoll(18);  // successes = 1
+    sim.processRoll(18);  // successes = 2
+    sim.processRoll(18);  // successes = 3
+
+    rnd::CostOutcome outcome = sim.cost();
+    assert(outcome == rnd::CostOutcome::RetrySuccess);
+}
+
 static void testReportCostOutcomes()
 {
     for (const CostOutcomeCase& c : COST_OUTCOME_CASES)
@@ -213,6 +288,109 @@ static void testRunRollSequenceExhaustsSafetyLimit()
 
     bool complete = runRollSequence(sim);
     assert(complete == false);
+}
+
+// promptInt/promptBool read from std::cin directly; redirect its buffer
+// to a stringstream so their parse/retry/EOF logic is exercised
+// deterministically instead of only via CI's one fixed smoke-test input.
+namespace
+{
+class CinRedirect
+{
+public:
+    explicit CinRedirect(const std::string& input)
+        : input_(input), original_(std::cin.rdbuf(input_.rdbuf()))
+    {
+    }
+
+    ~CinRedirect()
+    {
+        std::cin.rdbuf(original_);
+    }
+
+    CinRedirect(const CinRedirect&) = delete;
+    CinRedirect& operator=(const CinRedirect&) = delete;
+
+private:
+    std::istringstream input_;
+    std::streambuf* original_;
+};
+}  // namespace
+
+static void testPromptIntParsesValidInteger()
+{
+    CinRedirect redirect("42\n");
+
+    int value = 0;
+    promptInt(value, false);
+
+    assert(value == 42);
+}
+
+static void testPromptIntRetriesOnInvalidInputThenAcceptsValid()
+{
+    CinRedirect redirect("abc\n7\n");
+
+    int value = 0;
+    promptInt(value, false);
+
+    assert(value == 7);
+}
+
+static void testPromptIntRetriesUntilAboveZero()
+{
+    CinRedirect redirect("-5\n0\n3\n");
+
+    int value = 0;
+    promptInt(value, true);
+
+    assert(value == 3);
+}
+
+static void testPromptIntEofLeavesValueUntouched()
+{
+    CinRedirect redirect("");
+
+    int value = 99;
+    promptInt(value, false);
+
+    assert(value == 99);
+}
+
+static void testPromptBoolParsesYesNoCaseInsensitive()
+{
+    {
+        CinRedirect redirect("Y\n");
+        bool result = false;
+        promptBool(result);
+        assert(result == true);
+    }
+    {
+        CinRedirect redirect("N\n");
+        bool result = true;
+        promptBool(result);
+        assert(result == false);
+    }
+}
+
+static void testPromptBoolRetriesOnInvalidThenAccepts()
+{
+    CinRedirect redirect("q\ny\n");
+
+    bool result = false;
+    promptBool(result);
+
+    assert(result == true);
+}
+
+static void testPromptBoolEofDefaultsFalse()
+{
+    CinRedirect redirect("");
+
+    bool result = true;
+    promptBool(result);
+
+    assert(result == false);
 }
 
 static void testSimConfigDefaultValues()
@@ -265,15 +443,38 @@ static void testRunIterationExhaustsRetryLimit()
     assert(completed == false);
 }
 
+// The exhaustion path (testRunIterationExhaustsRetryLimit) is already
+// deterministic; the ordinary "fails once, retries, then succeeds" path
+// was previously only exercised by real (non-deterministic) dice.
+static void testRunIterationSucceedsAfterOneRetry()
+{
+    rnd sim(0, 0, false, 1);
+
+    sim.forceNextRoll(14);  // attempt 1: RetrySuccess -> retry
+    sim.forceNextRoll(14);
+    sim.forceNextRoll(14);
+
+    sim.forceNextRoll(18);  // attempt 2: clean Success -> done
+    sim.forceNextRoll(18);
+    sim.forceNextRoll(18);
+
+    bool completed = runIteration(sim);
+    assert(completed == true);
+}
+
 int main()
 {
     testConstructor();
     testReset();
     testPriorIncrement();
-    testLargeConstructorValues();
+    testConstructorClampsPriorToMax();
+    testConstructorClampsPriorToMin();
+    testConstructorClampsCostOffsetToMax();
+    testConstructorClampsCostOffsetToMin();
     testMultipleResets();
 
     testProcessRollBoundaries();
+    testProcessRollPerfectSuccessCapsRatherThanAdds();
     testProcessRollCriticalFailure();
     testProcessRollAccumulatesToThreshold();
 
@@ -281,14 +482,24 @@ int main()
     testRollReturnsTrueOnceFailThresholdReached();
 
     testCostOutcomes();
+    testCostOutcomeRetrySuccessViaFailsNotFaults();
     testReportCostOutcomes();
 
     testRunRollSequenceReturnsTrueWhenAlreadyAtThreshold();
     testRunRollSequenceExhaustsSafetyLimit();
 
+    testPromptIntParsesValidInteger();
+    testPromptIntRetriesOnInvalidInputThenAcceptsValid();
+    testPromptIntRetriesUntilAboveZero();
+    testPromptIntEofLeavesValueUntouched();
+    testPromptBoolParsesYesNoCaseInsensitive();
+    testPromptBoolRetriesOnInvalidThenAccepts();
+    testPromptBoolEofDefaultsFalse();
+
     testSimConfigDefaultValues();
     testRunSessionZeroRollsCompletesImmediately();
     testRunIterationCompletesWithoutHanging();
+    testRunIterationSucceedsAfterOneRetry();
     testRunIterationExhaustsRetryLimit();
 
     std::cout << "All tests passed.\n";
