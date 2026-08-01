@@ -62,56 +62,35 @@ static void testMultipleResets()
     }
 }
 
-static void testProcessRollPerfectSuccess()
+struct RollBoundaryCase
 {
-    rnd sim(0, 0, false, 1);
+    int rollValue;
+    int expectedSuccesses;
+    int expectedFaults;
+    int expectedFails;
+};
 
-    sim.processRoll(23);
+static const RollBoundaryCase ROLL_BOUNDARY_CASES[] = {
+    {23, 3, 0, 0},  // PERFECT_SUCCESS
+    {18, 1, 0, 0},  // SUCCESS lower boundary
+    {22, 1, 0, 0},  // SUCCESS upper boundary (just below PERFECT_SUCCESS)
+    {14, 1, 1, 0},  // SUCCESS_WITH_FAULT lower boundary
+    {17, 1, 1, 0},  // SUCCESS_WITH_FAULT upper boundary
+    {7, 0, 0, 0},   // neutral lower boundary
+    {13, 0, 0, 0},  // neutral upper boundary
+};
 
-    assert(sim.getSuccesses() == 3);
-    assert(sim.getFaults() == 0);
-    assert(sim.getFails() == 0);
-}
-
-static void testProcessRollSuccessBoundaries()
+static void testProcessRollBoundaries()
 {
-    rnd simLow(0, 0, false, 1);
-    simLow.processRoll(18);
-    assert(simLow.getSuccesses() == 1);
-    assert(simLow.getFaults() == 0);
+    for (const RollBoundaryCase& c : ROLL_BOUNDARY_CASES)
+    {
+        rnd sim(0, 0, false, 1);
+        sim.processRoll(c.rollValue);
 
-    rnd simHigh(0, 0, false, 1);
-    simHigh.processRoll(22);
-    assert(simHigh.getSuccesses() == 1);
-    assert(simHigh.getFaults() == 0);
-}
-
-static void testProcessRollSuccessWithFaultBoundaries()
-{
-    rnd simLow(0, 0, false, 1);
-    simLow.processRoll(14);
-    assert(simLow.getSuccesses() == 1);
-    assert(simLow.getFaults() == 1);
-
-    rnd simHigh(0, 0, false, 1);
-    simHigh.processRoll(17);
-    assert(simHigh.getSuccesses() == 1);
-    assert(simHigh.getFaults() == 1);
-}
-
-static void testProcessRollNeutralBoundaries()
-{
-    rnd simLow(0, 0, false, 1);
-    simLow.processRoll(7);
-    assert(simLow.getSuccesses() == 0);
-    assert(simLow.getFaults() == 0);
-    assert(simLow.getFails() == 0);
-
-    rnd simHigh(0, 0, false, 1);
-    simHigh.processRoll(13);
-    assert(simHigh.getSuccesses() == 0);
-    assert(simHigh.getFaults() == 0);
-    assert(simHigh.getFails() == 0);
+        assert(sim.getSuccesses() == c.expectedSuccesses);
+        assert(sim.getFaults() == c.expectedFaults);
+        assert(sim.getFails() == c.expectedFails);
+    }
 }
 
 static void testProcessRollCriticalFailure()
@@ -294,10 +273,7 @@ int main()
     testLargeConstructorValues();
     testMultipleResets();
 
-    testProcessRollPerfectSuccess();
-    testProcessRollSuccessBoundaries();
-    testProcessRollSuccessWithFaultBoundaries();
-    testProcessRollNeutralBoundaries();
+    testProcessRollBoundaries();
     testProcessRollCriticalFailure();
     testProcessRollAccumulatesToThreshold();
 
