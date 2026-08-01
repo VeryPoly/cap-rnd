@@ -125,9 +125,19 @@ int main()
             {
                 int safetyCounter = 1000;
 
-                while (!simulator.roll()
-                       && --safetyCounter > 0)
+                for (;;)
                 {
+                    bool complete = simulator.roll();
+
+                    std::cout
+                        << simulator.getLastRoll()
+                        << ' ';
+
+                    if (complete)
+                        break;
+
+                    if (--safetyCounter <= 0)
+                        break;
                 }
 
                 if (safetyCounter <= 0)
@@ -137,7 +147,47 @@ int main()
                     return 1;
                 }
 
-                retry = simulator.cost();
+                rnd::CostOutcome outcome = simulator.cost();
+
+                bool succeeded =
+                    outcome == rnd::CostOutcome::RetrySuccess
+                    || outcome == rnd::CostOutcome::Success;
+
+                if (succeeded)
+                {
+                    std::cout
+                        << "\nFaults: "
+                        << simulator.getFaults()
+                        << ", "
+                        << simulator.getFails()
+                        << " crit faults\n";
+                }
+
+                std::cout
+                    << "Total cost: "
+                    << simulator.getScaledCost();
+
+                switch (outcome)
+                {
+                    case rnd::CostOutcome::RetrySuccess:
+                        std::cout
+                            << " success, redoing to remove fault.\n\n";
+                        break;
+
+                    case rnd::CostOutcome::Success:
+                        std::cout
+                            << " success.\n\n";
+                        break;
+
+                    default:
+                        std::cout
+                            << " failed.\n\n";
+                        break;
+                }
+
+                retry =
+                    outcome == rnd::CostOutcome::RetrySuccess
+                    || outcome == rnd::CostOutcome::RetryFailure;
 
                 simulator.reset();
 

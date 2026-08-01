@@ -167,7 +167,7 @@ static void testCostSuccessWithoutFaultFinalizes()
     sim.processRoll(18);
     sim.processRoll(18);
 
-    assert(sim.cost() == false);
+    assert(sim.cost() == rnd::CostOutcome::Success);
     assert(sim.getGrandTotalCost() > 0);
 }
 
@@ -179,7 +179,7 @@ static void testCostSuccessWithFaultRetries()
     sim.processRoll(14);
     sim.processRoll(14);
 
-    assert(sim.cost() == true);
+    assert(sim.cost() == rnd::CostOutcome::RetrySuccess);
     assert(sim.getGrandTotalCost() == 0);
 }
 
@@ -191,7 +191,7 @@ static void testCostFailureKeepGoingRetries()
     sim.processRoll(6);
     sim.processRoll(6);
 
-    assert(sim.cost() == true);
+    assert(sim.cost() == rnd::CostOutcome::RetryFailure);
     assert(sim.getGrandTotalCost() == 0);
 }
 
@@ -203,7 +203,7 @@ static void testCostFailureNoKeepGoingFinalizes()
     sim.processRoll(6);
     sim.processRoll(6);
 
-    assert(sim.cost() == false);
+    assert(sim.cost() == rnd::CostOutcome::GiveUpFailure);
     assert(sim.getGrandTotalCost() > 0);
 }
 

@@ -30,23 +30,36 @@ private:
 
     bool keepGoing;
 
+    int lastRoll;
+
     std::mt19937 rng;
 
     static long long safeAdd(long long a, long long b);
     static long long safeMultiply(long long a, long long b);
 
 public:
+    enum class CostOutcome
+    {
+        RetrySuccess,
+        Success,
+        RetryFailure,
+        GiveUpFailure
+    };
+
     rnd(int p, int co, bool kg, unsigned int seed = std::random_device{}());
 
     bool roll();
     void processRoll(int rollValue);
 
-    bool cost();
+    CostOutcome cost();
 
     void reset();
     void incPrior();
 
     long long getGrandTotalCost() const;
+    long long getScaledCost() const;
+
+    int getLastRoll() const;
 
     int getSuccesses() const;
     int getFaults() const;
