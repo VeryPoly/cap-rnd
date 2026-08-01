@@ -7,10 +7,13 @@ void promptBool(bool& result);
 
 struct SimConfig
 {
-    int prior;
-    int costOffset;
-    int numRolls;
-    bool keepGoing;
+    // Defaults matter, not just documentation: promptInt() only assigns
+    // its target on a successful read, so if stdin hits EOF before any
+    // input is given, these fields would otherwise be left indeterminate.
+    int prior = 0;
+    int costOffset = 0;
+    int numRolls = 0;
+    bool keepGoing = false;
 };
 
 SimConfig promptConfig();

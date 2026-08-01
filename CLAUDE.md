@@ -4,20 +4,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A lightweight C++17 CLI simulator for CAP-style rolling systems. Simulates repeated d20 rolls, tracks successes/faults/critical failures per attempt, and accumulates cost across completed iterations. No external runtime dependencies.
+A lightweight C++20 CLI simulator for CAP-style rolling systems. Simulates repeated d20 rolls, tracks successes/faults/critical failures per attempt, and accumulates cost across completed iterations. No external runtime dependencies.
 
 ## Build
 
 ```
-g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic rnd.cpp rndCli.cpp rndMain.cpp -o rnd
+g++ -std=c++20 -O2 -Wall -Wextra -Wpedantic rnd.cpp rndCli.cpp rndMain.cpp -o rnd
 ```
 
-(Clang: swap `g++` for `clang++`. MSVC: `cl /std:c++17 /O2 rnd.cpp rndCli.cpp rndMain.cpp`.)
+(Clang: swap `g++` for `clang++`. MSVC: `cl /std:c++20 /O2 rnd.cpp rndCli.cpp rndMain.cpp`.)
 
 ## Test
 
 ```
-g++ -std=c++17 tests/test_basic.cpp rndCli.cpp rnd.cpp -o test_runner
+g++ -std=c++20 tests/test_basic.cpp rndCli.cpp rnd.cpp -o test_runner
 ./test_runner
 ```
 

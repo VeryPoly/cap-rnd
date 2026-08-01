@@ -236,9 +236,22 @@ static void testRunRollSequenceExhaustsSafetyLimit()
     assert(complete == false);
 }
 
+static void testSimConfigDefaultValues()
+{
+    // Guards against the bug this fixed: promptInt() only assigns on a
+    // successful read, so if stdin hits EOF before any input at all,
+    // these fields must already be at a safe, defined value.
+    SimConfig config;
+
+    assert(config.prior == 0);
+    assert(config.costOffset == 0);
+    assert(config.numRolls == 0);
+    assert(config.keepGoing == false);
+}
+
 static void testRunSessionZeroRollsCompletesImmediately()
 {
-    SimConfig config{0, 0, 0, false};
+    SimConfig config;
 
     bool completed = runSession(config);
     assert(completed == true);
@@ -297,6 +310,7 @@ int main()
     testRunRollSequenceReturnsTrueWhenAlreadyAtThreshold();
     testRunRollSequenceExhaustsSafetyLimit();
 
+    testSimConfigDefaultValues();
     testRunSessionZeroRollsCompletesImmediately();
     testRunIterationCompletesWithoutHanging();
     testRunIterationExhaustsRetryLimit();
