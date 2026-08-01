@@ -43,17 +43,17 @@ rnd::rnd(int p, int co, bool kg, unsigned int seed)
       lastRoll(0),
       rng(seed)
 {
-    if (prior < -20)
-        prior = -20;
+    if (prior < PRIOR_MIN)
+        prior = PRIOR_MIN;
 
-    if (prior > 20)
-        prior = 20;
+    if (prior > PRIOR_MAX)
+        prior = PRIOR_MAX;
 
-    if (costOffset < -3)
-        costOffset = -3;
+    if (costOffset < COST_OFFSET_MIN)
+        costOffset = COST_OFFSET_MIN;
 
-    if (costOffset > 6)
-        costOffset = 6;
+    if (costOffset > COST_OFFSET_MAX)
+        costOffset = COST_OFFSET_MAX;
 
     int exponent = costOffset + 3;
 
@@ -65,9 +65,18 @@ rnd::rnd(int p, int co, bool kg, unsigned int seed)
 
 bool rnd::roll()
 {
-    std::uniform_int_distribution<int> d20(1, D20_SIDES);
+    int rollValue;
 
-    int rollValue = d20(rng) + prior;
+    if (!forcedRolls.empty())
+    {
+        rollValue = forcedRolls.front();
+        forcedRolls.pop();
+    }
+    else
+    {
+        std::uniform_int_distribution<int> d20(1, D20_SIDES);
+        rollValue = d20(rng) + prior;
+    }
 
     processRoll(rollValue);
 
@@ -110,29 +119,33 @@ void rnd::processRoll(int rollValue)
 rnd::CostOutcome rnd::cost()
 {
     bool success = successes >= REQUIRED_SUCCESSES;
-
     bool retry = success && (faults > 0 || fails > 0);
+
+    CostOutcome outcome;
 
     if (retry)
     {
-        return CostOutcome::RetrySuccess;
+        outcome = CostOutcome::RetrySuccess;
+    }
+    else if (success)
+    {
+        outcome = CostOutcome::Success;
+    }
+    else if (keepGoing)
+    {
+        outcome = CostOutcome::RetryFailure;
+    }
+    else
+    {
+        outcome = CostOutcome::GiveUpFailure;
     }
 
-    if (success)
+    if (outcome == CostOutcome::Success || outcome == CostOutcome::GiveUpFailure)
     {
         grandTotalCost = safeAdd(grandTotalCost, totalCost);
-
-        return CostOutcome::Success;
     }
 
-    if (keepGoing)
-    {
-        return CostOutcome::RetryFailure;
-    }
-
-    grandTotalCost = safeAdd(grandTotalCost, totalCost);
-
-    return CostOutcome::GiveUpFailure;
+    return outcome;
 }
 
 void rnd::reset()
@@ -149,6 +162,11 @@ void rnd::incPrior()
     {
         ++prior;
     }
+}
+
+void rnd::forceNextRoll(int rollValue)
+{
+    forcedRolls.push(rollValue);
 }
 
 long long rnd::getGrandTotalCost() const
