@@ -16,6 +16,10 @@ private:
     static constexpr int REQUIRED_SUCCESSES = 3;
     static constexpr int REQUIRED_FAILURES = 3;
 
+    // Escalation cap for incPrior(), distinct from the constructor's
+    // wider [-20, 20] clamp on the initial prior.
+    static constexpr int MAX_ESCALATED_PRIOR = 7;
+
     int prior;
     int costOffset;
 

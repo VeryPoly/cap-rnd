@@ -149,7 +149,7 @@ void rnd::reset()
 
 void rnd::incPrior()
 {
-    if (prior < 7)
+    if (prior < MAX_ESCALATED_PRIOR)
     {
         ++prior;
     }
