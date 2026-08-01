@@ -7,13 +7,21 @@
 constexpr bool ABOVE_ZERO = true;
 constexpr bool ANY_INTEGER = false;
 
+namespace
+{
+void discardLine()
+{
+    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+}
+}  // namespace
+
 void promptInt(int& value, bool aboveZero)
 {
     while (true)
     {
         if (std::cin >> value)
         {
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            discardLine();
 
             if (!aboveZero || value > 0)
                 return;
@@ -24,7 +32,7 @@ void promptInt(int& value, bool aboveZero)
                 return;
 
             std::cin.clear();
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            discardLine();
         }
 
         std::cout << (aboveZero ? "Enter a number greater than zero: " : "Enter a valid number: ");
@@ -46,7 +54,7 @@ void promptBool(bool& result)
             }
 
             std::cin.clear();
-            std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+            discardLine();
 
             continue;
         }
