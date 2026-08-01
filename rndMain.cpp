@@ -9,15 +9,15 @@
 constexpr bool ABOVE_ZERO = true;
 constexpr bool ANY_INTEGER = false;
 
-void promptInt(int* value, bool aboveZero)
+void promptInt(int& value, bool aboveZero)
 {
     while (true)
     {
-        if (std::cin >> *value)
+        if (std::cin >> value)
         {
             std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
 
-            if (!aboveZero || *value > 0)
+            if (!aboveZero || value > 0)
                 return;
         }
         else
@@ -33,7 +33,7 @@ void promptInt(int* value, bool aboveZero)
     }
 }
 
-void promptBool(bool* result)
+void promptBool(bool& result)
 {
     while (true)
     {
@@ -43,7 +43,7 @@ void promptBool(bool* result)
         {
             if (std::cin.eof())
             {
-                *result = false;
+                result = false;
                 return;
             }
 
@@ -57,13 +57,13 @@ void promptBool(bool* result)
 
         if (c == 'y')
         {
-            *result = true;
+            result = true;
             return;
         }
 
         if (c == 'n')
         {
-            *result = false;
+            result = false;
             return;
         }
 
@@ -84,16 +84,16 @@ SimConfig promptConfig()
     SimConfig config;
 
     std::cout << "Prior: ";
-    promptInt(&config.prior, ANY_INTEGER);
+    promptInt(config.prior, ANY_INTEGER);
 
     std::cout << "Cost Offset: ";
-    promptInt(&config.costOffset, ANY_INTEGER);
+    promptInt(config.costOffset, ANY_INTEGER);
 
     std::cout << "Number of Rolls: ";
-    promptInt(&config.numRolls, ABOVE_ZERO);
+    promptInt(config.numRolls, ABOVE_ZERO);
 
     std::cout << "Keep Going if failed? (y/n): ";
-    promptBool(&config.keepGoing);
+    promptBool(config.keepGoing);
 
     return config;
 }
@@ -221,7 +221,7 @@ int main()
         std::cout << "Run another simulation? (y/n): ";
 
         bool continueProgram;
-        promptBool(&continueProgram);
+        promptBool(continueProgram);
 
         if (!continueProgram)
             break;
