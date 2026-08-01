@@ -1,5 +1,6 @@
 #include "rnd.h"
 
+#include <algorithm>
 #include <cassert>
 
 long long rnd::safeAdd(long long a, long long b)
@@ -44,17 +45,8 @@ rnd::rnd(int p, int co, bool kg, unsigned int seed)
       lastRoll(0),
       rng(seed)
 {
-    if (prior < PRIOR_MIN)
-        prior = PRIOR_MIN;
-
-    if (prior > PRIOR_MAX)
-        prior = PRIOR_MAX;
-
-    if (costOffset < COST_OFFSET_MIN)
-        costOffset = COST_OFFSET_MIN;
-
-    if (costOffset > COST_OFFSET_MAX)
-        costOffset = COST_OFFSET_MAX;
+    prior = std::clamp(prior, PRIOR_MIN, PRIOR_MAX);
+    costOffset = std::clamp(costOffset, COST_OFFSET_MIN, COST_OFFSET_MAX);
 
     int exponent = costOffset + 3;
 
