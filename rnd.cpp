@@ -2,8 +2,10 @@
 
 #include <algorithm>
 #include <cassert>
+#include <stdexcept>
+#include <utility>
 
-long long rnd::safeAdd(long long a, long long b)
+long long Simulator::safeAdd(long long a, long long b)
 {
     if (b > 0 && a > std::numeric_limits<long long>::max() - b)
     {
@@ -18,7 +20,7 @@ long long rnd::safeAdd(long long a, long long b)
     return a + b;
 }
 
-long long rnd::safeMultiply(long long a, long long b)
+long long Simulator::safeMultiply(long long a, long long b)
 {
     assert(a >= 0 && b >= 0);
 
@@ -31,9 +33,9 @@ long long rnd::safeMultiply(long long a, long long b)
     return a * b;
 }
 
-rnd::rnd(int p, int co, bool kg, unsigned int seed)
-    : prior(p),
-      costOffset(co),
+Simulator::Simulator(int initialPrior, int initialCostOffset, bool continueOnFailure,
+                     unsigned int seed, std::function<int()> source)
+    : prior(initialPrior),
       successes(0),
       faults(0),
       fails(0),
@@ -41,12 +43,13 @@ rnd::rnd(int p, int co, bool kg, unsigned int seed)
       totalCost(0),
       grandTotalCost(0),
       multiplier(1),
-      keepGoing(kg),
+      keepGoing(continueOnFailure),
       lastRoll(0),
+      rollSource(std::move(source)),
       rng(seed)
 {
     prior = std::clamp(prior, PRIOR_MIN, PRIOR_MAX);
-    costOffset = std::clamp(costOffset, COST_OFFSET_MIN, COST_OFFSET_MAX);
+    const int costOffset = std::clamp(initialCostOffset, COST_OFFSET_MIN, COST_OFFSET_MAX);
 
     int exponent = costOffset + 3;
 
@@ -56,14 +59,26 @@ rnd::rnd(int p, int co, bool kg, unsigned int seed)
     }
 }
 
-bool rnd::roll()
+bool Simulator::isComplete() const
 {
+    return successes >= REQUIRED_SUCCESSES || fails >= REQUIRED_FAILURES;
+}
+
+bool Simulator::canCompleteCleanly() const
+{
+    return D20_SIDES + prior >= SUCCESS;
+}
+
+bool Simulator::roll()
+{
+    if (isComplete())
+        return true;
+
     int rollValue;
 
-    if (!forcedRolls.empty())
+    if (rollSource)
     {
-        rollValue = forcedRolls.front();
-        forcedRolls.pop();
+        rollValue = rollSource();
     }
     else
     {
@@ -73,18 +88,20 @@ bool rnd::roll()
 
     processRoll(rollValue);
 
-    lastRoll = rollValue;
-
-    return successes >= REQUIRED_SUCCESSES || fails >= REQUIRED_FAILURES;
+    return isComplete();
 }
 
-void rnd::processRoll(int rollValue)
+void Simulator::processRoll(int rollValue)
 {
+    if (costComputed || isComplete())
+        throw std::logic_error("Reset the completed attempt before rolling again.");
+
     std::uniform_int_distribution<int> costRoll(1, D20_SIDES);
 
     long long cost = costRoll(rng);
 
     totalCost = safeAdd(totalCost, cost);
+    lastRoll = rollValue;
 
     if (rollValue >= PERFECT_SUCCESS)
     {
@@ -109,10 +126,12 @@ void rnd::processRoll(int rollValue)
     }
 }
 
-rnd::CostOutcome rnd::cost()
+Simulator::CostOutcome Simulator::finalizeAttempt()
 {
-    assert(!costComputed);
-    assert(successes >= REQUIRED_SUCCESSES || fails >= REQUIRED_FAILURES);
+    if (costComputed)
+        return finalizedOutcome;
+    if (!isComplete())
+        throw std::logic_error("Complete the attempt before finalizing its cost.");
 
     costComputed = true;
 
@@ -143,10 +162,11 @@ rnd::CostOutcome rnd::cost()
         grandTotalCost = safeAdd(grandTotalCost, totalCost);
     }
 
+    finalizedOutcome = outcome;
     return outcome;
 }
 
-void rnd::reset()
+void Simulator::reset()
 {
     successes = 0;
     faults = 0;
@@ -155,7 +175,7 @@ void rnd::reset()
     totalCost = 0;
 }
 
-void rnd::incPrior()
+void Simulator::incPrior()
 {
     if (prior < MAX_ESCALATED_PRIOR)
     {
@@ -163,37 +183,32 @@ void rnd::incPrior()
     }
 }
 
-void rnd::forceNextRoll(int rollValue)
-{
-    forcedRolls.push(rollValue);
-}
-
-long long rnd::getGrandTotalCost() const
+long long Simulator::getGrandTotalCost() const
 {
     return safeMultiply(grandTotalCost, multiplier);
 }
 
-long long rnd::getScaledCost() const
+long long Simulator::getScaledCost() const
 {
     return safeMultiply(totalCost, multiplier);
 }
 
-int rnd::getLastRoll() const
+int Simulator::getLastRoll() const
 {
     return lastRoll;
 }
 
-int rnd::getSuccesses() const
+int Simulator::getSuccesses() const
 {
     return successes;
 }
 
-int rnd::getFaults() const
+int Simulator::getFaults() const
 {
     return faults;
 }
 
-int rnd::getFails() const
+int Simulator::getFails() const
 {
     return fails;
 }

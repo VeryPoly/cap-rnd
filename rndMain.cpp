@@ -8,9 +8,11 @@ int main()
 
     while (true)
     {
-        SimConfig config = promptConfig();
+        auto config = promptConfig();
+        if (!config)
+            return 0;
 
-        if (!runSession(config))
+        if (runSession(*config) != RunResult::Completed)
             return 1;
 
         std::cout << "Run another simulation? (y/n): ";

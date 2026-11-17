@@ -2,28 +2,38 @@
 
 #include "rnd.h"
 
-void promptInt(int& value, bool aboveZero);
-void promptBool(bool& result);
+#include <iostream>
+#include <optional>
+
+// Return false when input ends before a valid value is available.
+bool promptInt(int& value, bool aboveZero, std::istream& input = std::cin,
+               std::ostream& output = std::cout);
+bool promptBool(bool& result, std::istream& input = std::cin, std::ostream& output = std::cout);
 
 struct SimConfig
 {
-    // Defaults matter, not just documentation: promptInt() only assigns
-    // its target on a successful read, so if stdin hits EOF before any
-    // input is given, these fields would otherwise be left indeterminate.
     int prior = 0;
     int costOffset = 0;
-    int numRolls = 0;
+    int numIterations = 0;
     bool keepGoing = false;
 };
 
-SimConfig promptConfig();
+enum class RunResult
+{
+    Completed,
+    RollLimitExceeded,
+    RetryLimitExceeded,
+    InvalidConfig
+};
 
-bool runRollSequence(rnd& simulator);
+std::optional<SimConfig> promptConfig(std::istream& input = std::cin,
+                                      std::ostream& output = std::cout);
 
-// Not a pure report: also drives the cost() state transition
-// (finalizes grandTotalCost on Success/GiveUpFailure) as a side effect,
-// in addition to printing the outcome.
-rnd::CostOutcome reportCost(rnd& simulator);
+void printCost(const Simulator& simulator, Simulator::CostOutcome outcome,
+               std::ostream& output = std::cout);
 
-bool runIteration(rnd& simulator);
-bool runSession(const SimConfig& config);
+RunResult runRollSequence(Simulator& simulator, std::ostream& output = std::cout);
+RunResult runIteration(Simulator& simulator, std::ostream& output = std::cout,
+                       std::ostream& errors = std::cerr);
+RunResult runSession(const SimConfig& config, std::ostream& output = std::cout,
+                     std::ostream& errors = std::cerr);

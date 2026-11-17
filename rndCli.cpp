@@ -2,163 +2,141 @@
 
 #include <cctype>
 #include <iostream>
-#include <limits>
+#include <sstream>
+#include <string>
 
 constexpr bool ABOVE_ZERO = true;
 constexpr bool ANY_INTEGER = false;
 
 namespace
 {
-void discardLine()
-{
-    std::cin.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-}
-
-void warnIfClamped(int value, int min, int max, const char* label)
+void warnIfClamped(int value, int min, int max, const char* label, std::ostream& output)
 {
     if (value < min || value > max)
     {
-        std::cout << label << " is clamped to the range [" << min << ", " << max << "].\n";
+        output << label << " is clamped to the range [" << min << ", " << max << "].\n";
     }
 }
 }  // namespace
 
-void promptInt(int& value, bool aboveZero)
+bool promptInt(int& value, bool aboveZero, std::istream& input, std::ostream& output)
 {
-    while (true)
+    std::string line;
+    while (std::getline(input, line))
     {
-        if (std::cin >> value)
+        std::istringstream parsed(line);
+        int candidate;
+        if (parsed >> candidate && (parsed >> std::ws).eof() && (!aboveZero || candidate > 0))
         {
-            discardLine();
-
-            if (!aboveZero || value > 0)
-                return;
+            value = candidate;
+            return true;
         }
-        else
-        {
-            if (std::cin.eof())
-                return;
-
-            std::cin.clear();
-            discardLine();
-        }
-
-        std::cout << (aboveZero ? "Enter a number greater than zero: " : "Enter a valid number: ");
+        output << (aboveZero ? "Enter a number greater than zero: " : "Enter a valid number: ");
     }
+    return false;
 }
 
-void promptBool(bool& result)
+bool promptBool(bool& result, std::istream& input, std::ostream& output)
 {
-    while (true)
+    std::string line;
+    while (std::getline(input, line))
     {
-        char c;
-
-        if (!(std::cin >> c))
+        std::istringstream parsed(line);
+        char candidate;
+        if (parsed >> candidate && (parsed >> std::ws).eof())
         {
-            if (std::cin.eof())
+            candidate = static_cast<char>(std::tolower(static_cast<unsigned char>(candidate)));
+            if (candidate == 'y' || candidate == 'n')
             {
-                result = false;
-                return;
+                result = candidate == 'y';
+                return true;
             }
-
-            std::cin.clear();
-            discardLine();
-
-            continue;
         }
-
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-
-        if (c == 'y')
-        {
-            result = true;
-            return;
-        }
-
-        if (c == 'n')
-        {
-            result = false;
-            return;
-        }
-
-        std::cout << "Enter y or n: ";
+        output << "Enter y or n: ";
     }
+    result = false;
+    return false;
 }
 
-SimConfig promptConfig()
+std::optional<SimConfig> promptConfig(std::istream& input, std::ostream& output)
 {
     SimConfig config;
 
-    std::cout << "Prior: ";
-    promptInt(config.prior, ANY_INTEGER);
-    warnIfClamped(config.prior, rnd::PRIOR_MIN, rnd::PRIOR_MAX, "Prior");
+    output << "Prior: ";
+    if (!promptInt(config.prior, ANY_INTEGER, input, output))
+        return std::nullopt;
+    warnIfClamped(config.prior, Simulator::PRIOR_MIN, Simulator::PRIOR_MAX, "Prior", output);
 
-    std::cout << "Cost Offset: ";
-    promptInt(config.costOffset, ANY_INTEGER);
-    warnIfClamped(config.costOffset, rnd::COST_OFFSET_MIN, rnd::COST_OFFSET_MAX, "Cost Offset");
+    output << "Cost Offset: ";
+    if (!promptInt(config.costOffset, ANY_INTEGER, input, output))
+        return std::nullopt;
+    warnIfClamped(config.costOffset, Simulator::COST_OFFSET_MIN, Simulator::COST_OFFSET_MAX,
+                  "Cost Offset", output);
 
-    std::cout << "Number of Rolls: ";
-    promptInt(config.numRolls, ABOVE_ZERO);
+    output << "Number of Iterations: ";
+    if (!promptInt(config.numIterations, ABOVE_ZERO, input, output))
+        return std::nullopt;
 
-    std::cout << "Keep Going if failed? (y/n): ";
-    promptBool(config.keepGoing);
+    output << "Keep Going if failed? (y/n): ";
+    if (!promptBool(config.keepGoing, input, output))
+        return std::nullopt;
 
     return config;
 }
 
-bool runRollSequence(rnd& simulator)
+RunResult runRollSequence(Simulator& simulator, std::ostream& output)
 {
-    int safetyCounter = 1000;
+    if (simulator.isComplete())
+        return RunResult::Completed;
+
+    constexpr int MAX_ROLLS_PER_ATTEMPT = 1000;
+    int remainingRolls = MAX_ROLLS_PER_ATTEMPT;
 
     for (;;)
     {
         bool complete = simulator.roll();
 
-        std::cout << simulator.getLastRoll() << ' ';
+        output << simulator.getLastRoll() << ' ';
 
         if (complete)
-            return true;
+            return RunResult::Completed;
 
-        if (--safetyCounter <= 0)
-            return false;
+        if (--remainingRolls <= 0)
+            return RunResult::RollLimitExceeded;
     }
 }
 
-rnd::CostOutcome reportCost(rnd& simulator)
+void printCost(const Simulator& simulator, Simulator::CostOutcome outcome, std::ostream& output)
 {
-    rnd::CostOutcome outcome = simulator.cost();
-
-    bool succeeded =
-        outcome == rnd::CostOutcome::RetrySuccess || outcome == rnd::CostOutcome::Success;
+    bool succeeded = outcome == Simulator::CostOutcome::RetrySuccess ||
+                     outcome == Simulator::CostOutcome::Success;
 
     if (succeeded)
     {
-        std::cout << "\nFaults: " << simulator.getFaults() << ", " << simulator.getFails()
-                  << " crit faults\n";
+        output << "\nFaults: " << simulator.getFaults() << ", " << simulator.getFails()
+               << " crit faults\n";
     }
 
-    std::cout << "Total cost: " << simulator.getScaledCost();
+    output << "Total cost: " << simulator.getScaledCost();
 
     switch (outcome)
     {
-        case rnd::CostOutcome::RetrySuccess:
-            std::cout << " success, redoing to remove fault.\n\n";
+        case Simulator::CostOutcome::RetrySuccess:
+            output << " success, redoing to remove fault.\n\n";
             break;
 
-        case rnd::CostOutcome::Success:
-            std::cout << " success.\n\n";
+        case Simulator::CostOutcome::Success:
+            output << " success.\n\n";
             break;
 
-        case rnd::CostOutcome::RetryFailure:
-        case rnd::CostOutcome::GiveUpFailure:
-            std::cout << " failed.\n\n";
+        case Simulator::CostOutcome::RetryFailure:
+        case Simulator::CostOutcome::GiveUpFailure:
+            output << " failed.\n\n";
             break;
     }
-
-    return outcome;
 }
 
-bool runIteration(rnd& simulator)
+RunResult runIteration(Simulator& simulator, std::ostream& output, std::ostream& errors)
 {
     constexpr int MAX_RETRIES = 100;
     int retryCount = 0;
@@ -167,16 +145,18 @@ bool runIteration(rnd& simulator)
 
     do
     {
-        if (!runRollSequence(simulator))
+        const auto result = runRollSequence(simulator, output);
+        if (result != RunResult::Completed)
         {
-            std::cerr << "Safety limit exceeded.\n";
-            return false;
+            errors << "Safety limit exceeded.\n";
+            return result;
         }
 
-        rnd::CostOutcome outcome = reportCost(simulator);
+        Simulator::CostOutcome outcome = simulator.finalizeAttempt();
+        printCost(simulator, outcome, output);
 
-        retry =
-            outcome == rnd::CostOutcome::RetrySuccess || outcome == rnd::CostOutcome::RetryFailure;
+        retry = outcome == Simulator::CostOutcome::RetrySuccess ||
+                outcome == Simulator::CostOutcome::RetryFailure;
 
         simulator.reset();
 
@@ -184,10 +164,10 @@ bool runIteration(rnd& simulator)
         {
             ++retryCount;
 
-            if (retryCount >= MAX_RETRIES)
+            if (retryCount > MAX_RETRIES)
             {
-                std::cerr << "Retry limit exceeded.\n";
-                return false;
+                errors << "Retry limit exceeded.\n";
+                return RunResult::RetryLimitExceeded;
             }
         }
 
@@ -195,25 +175,31 @@ bool runIteration(rnd& simulator)
 
     simulator.incPrior();
 
-    return true;
+    return RunResult::Completed;
 }
 
-bool runSession(const SimConfig& config)
+RunResult runSession(const SimConfig& config, std::ostream& output, std::ostream& errors)
 {
-    rnd simulator(config.prior, config.costOffset, config.keepGoing);
+    Simulator simulator(config.prior, config.costOffset, config.keepGoing);
+
+    if (config.numIterations > 0 && config.keepGoing && !simulator.canCompleteCleanly())
+    {
+        errors << "Prior must be at least -2 when continuing after failures.\n";
+        return RunResult::InvalidConfig;
+    }
 
     int completed = 0;
 
-    while (completed < config.numRolls)
+    while (completed < config.numIterations)
     {
-        if (!runIteration(simulator))
-            return false;
+        const auto result = runIteration(simulator, output, errors);
+        if (result != RunResult::Completed)
+            return result;
 
         ++completed;
     }
 
-    std::cout << "Grand total cost across all iterations: " << simulator.getGrandTotalCost()
-              << "\n\n";
+    output << "Grand total cost across all iterations: " << simulator.getGrandTotalCost() << "\n\n";
 
-    return true;
+    return RunResult::Completed;
 }

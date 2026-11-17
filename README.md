@@ -136,14 +136,14 @@ After launching the application, the following inputs are requested:
 Input| Description
 Prior| Modifier applied to every d20 roll
 Cost Offset| Cost scaling exponent
-Number of Rolls| Number of completed simulations
+Number of Iterations| Number of completed simulations
 Keep Going| Continue after failed attempts
 
 Example:
 
 Prior: 2
 Cost Offset: 1
-Number of Rolls: 5
+Number of Iterations: 5
 Keep Going if failed? (y/n): y
 
 ---
@@ -220,7 +220,7 @@ Example Output
 
 Prior: 2
 Cost Offset: 1
-Number of Rolls: 1
+Number of Iterations: 1
 Keep Going if failed? (y/n): y
 
 18 22 14

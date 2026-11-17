@@ -20,7 +20,7 @@ This is the developer-facing companion to [README.md](../README.md) (end-user in
 
 cap-rnd simulates repeated d20 rolls against configurable thresholds, tracking successes/faults/critical-failures per attempt and accumulating cost across completed iterations. The whole program is three translation units with a strict responsibility split:
 
-- **`rnd.h` / `rnd.cpp`** — the simulation engine (`rnd` class). Does **no I/O**. `roll()` and `cost()` return data (a `bool`, a `CostOutcome`) instead of printing; callers read state back via getters. This is the one class in the project.
+- **`rnd.h` / `rnd.cpp`** — the simulation engine (`Simulator` class). Does **no I/O**. `roll()` and `finalizeAttempt()` return data (a `bool`, a `CostOutcome`) instead of printing; callers read state back via getters. This is the one class in the project.
 - **`rndCli.h` / `rndCli.cpp`** — CLI orchestration and all printing. Drives the engine and formats output. Split out from `main()` specifically so it's linkable into the test binary without pulling in a second `main()` (which would collide at link time).
 - **`rndMain.cpp`** — just `main()`: the outer "run another simulation?" loop.
 
@@ -33,7 +33,7 @@ flowchart TD
     C --> D[runIteration]
     D --> E[runRollSequence]
     E -->|roll until 3 successes<br/>or 3 fails, or safety limit| F{complete?}
-    F -->|yes| G[reportCost]
+    F -->|yes| G[finalizeAttempt and printCost]
     F -->|no, safety limit hit| H[abort session]
     G --> I[simulator.cost]
     I --> J{retry outcome?}
@@ -114,17 +114,15 @@ The exact same flags are also encoded once, in one place, as the CI composite ac
 
 These are decisions with real reasoning behind them — worth knowing before you change the surrounding code.
 
-**Why the engine does no I/O.** `rnd::roll()`/`cost()` return data instead of printing so the engine is usable headless from tests without capturing stdout or faking a terminal. All formatting lives in `rndCli.cpp`.
+**Why the engine does no I/O.** `Simulator::roll()`/`finalizeAttempt()` return data instead of printing so the engine is usable headless from tests without capturing stdout or faking a terminal. All formatting lives in `rndCli.cpp`.
 
 **Why `rndCli.cpp` exists as a separate translation unit from `rndMain.cpp`.** The test binary (`tests/test_basic.cpp`) needs `promptInt`/`runSession`/etc. but must not link a second `main()`. Splitting orchestration from the entry point is what makes `tests/test_basic.cpp` + `rndCli.cpp` + `rnd.cpp` a valid, self-contained link.
 
-**Why saturating arithmetic (`safeAdd`/`safeMultiply`) instead of raw `+`/`*`.** Cost accumulates across every iteration in a session (`grandTotalCost`); an unbounded `numRolls` (no upper limit is enforced — see [Troubleshooting](#troubleshooting)) makes overflow a real reachable condition over a long session, not just a theoretical one. Saturating at `LLONG_MIN`/`LLONG_MAX` beats silently wrapping into a negative or nonsensical total. `safeMultiply` asserts both operands are non-negative — every current call site guarantees this (costs are always ≥ 0); if you add a new call site, keep that invariant true or the assert fires.
+**Why saturating arithmetic (`safeAdd`/`safeMultiply`) instead of raw `+`/`*`.** Cost accumulates across every iteration in a session (`grandTotalCost`); an unbounded `numIterations` (no upper limit is enforced — see [Troubleshooting](#troubleshooting)) makes overflow a real reachable condition over a long session, not just a theoretical one. Saturating at `LLONG_MIN`/`LLONG_MAX` beats silently wrapping into a negative or nonsensical total. `safeMultiply` asserts both operands are non-negative — every current call site guarantees this (costs are always ≥ 0); if you add a new call site, keep that invariant true or the assert fires.
 
-**Why the `forceNextRoll`/`forcedRolls` test seam instead of a mocking framework.** Some behavior (the 1000-roll safety limit in `runRollSequence`, the 100-retry limit in `runIteration`) is only reachable with dozens to hundreds of *specific, consecutive* roll outcomes in a row — not something real dice can reliably reproduce in a test. Rather than pull in a mocking library, `rnd` exposes one queue (`std::queue<int> forcedRolls`) that `roll()` drains before falling back to the real RNG. Empty by default, so production behavior is untouched; tests preload it via `forceNextRoll()`.
+**Roll generation.** The engine accepts an optional callable producing modified roll values. Without it, rolls use the seeded RNG and prior. Tests own their scripted queues in a fixture and supply the callable. Cost rolls always use the seeded RNG.
 
-**Why `cost()` asserts instead of silently tolerating misuse.** `cost()` has two real preconditions that aren't enforced by the type system: (1) it must only be called once per un-reset attempt — calling it twice double-adds `totalCost` into `grandTotalCost`; (2) it must only be called once the roll sequence has actually reached a terminal state (3 successes or 3 fails) — calling it early misreports `RetryFailure`/`GiveUpFailure` for an attempt that isn't actually finished. Both held only by caller discipline in the current call graph (`reportCost()` → `cost()`, called exactly once per iteration, always after `runRollSequence()` completes). A `costComputed` guard flag plus a terminal-state assert make violations fail loud in debug builds instead of corrupting state silently. See [rnd::cost()](#rndcost) below.
-
-**Why no exceptions.** Every failure path in this program (retry/safety limit exceeded, malformed input) is handled with a `bool` return + a printed message, matching the rest of the codebase's style. Introducing exceptions for a linear, single-threaded CLI wouldn't simplify anything here.
+**Attempt lifecycle.** Finalize completed attempts with `finalizeAttempt()`. Repeated finalization returns the cached outcome without adding cost again. Incomplete finalization and direct processing after completion throw `std::logic_error`. Calling `roll()` on a completed attempt returns true without changing state. Call `reset()` before another attempt.
 
 **Why no build system (CMake, etc.).** Three source files, one test file, three supported compilers, no external dependencies. A raw, single documented compiler invocation is simpler than a generated build system at this scale — revisit if the file count or dependency count grows meaningfully.
 
@@ -136,58 +134,37 @@ These are decisions with real reasoning behind them — worth knowing before you
 
 ## API reference
 
-### `rnd` (rnd.h / rnd.cpp)
+### Simulation engine
 
-The simulation engine. One instance per session; state is mutated by `roll()`, finalized by `cost()`, cleared per-attempt by `reset()`.
+`Simulator` is declared in rnd.h. The original name `rnd` remains a type alias.
 
-**Constructor** — `rnd(int p, int co, bool kg, unsigned int seed = std::random_device{}())`
-Clamps `p` to `[PRIOR_MIN, PRIOR_MAX]` = `[-20, 20]` and `co` to `[COST_OFFSET_MIN, COST_OFFSET_MAX]` = `[-3, 6]`. Precomputes `multiplier = 10^(co+3)` once. `seed` defaults to a real entropy source; tests pass a fixed value for determinism.
+- The constructor accepts prior, cost offset, keep-going policy, an optional seed, and an optional `std::function<int()>` roll source. Prior is clamped to [-20, 20] and cost offset to [-3, 6].
+- `roll()` processes the next modified roll and returns whether the attempt is complete. An injected source supplies already-modified values. Without it, the engine generates d20 + prior.
+- `processRoll(value)` updates counters, last-roll value, and random cost. It rejects completed attempts.
+- `isComplete()` checks the success and failure thresholds. `canCompleteCleanly()` checks whether d20 + prior can reach the clean-success threshold.
+- `finalizeAttempt()` returns a CostOutcome. RetrySuccess and RetryFailure request another attempt. Success and GiveUpFailure finish an iteration and add its unscaled cost to the grand total. Finalization is idempotent until reset.
+- `reset()` clears counters, attempt cost, and finalization status. Prior, RNG state, last roll, and grand total persist.
+- `incPrior()` increases prior up to 7. Values initially above 7 remain unchanged.
+- Const getters expose counters and scaled costs. Cost scaling is 10^(costOffset+3), with saturating arithmetic.
 
-**`[[nodiscard]] bool roll()`**
-Draws the next roll (from `forcedRolls` if non-empty, else `d20(rng) + prior`), classifies it via `processRoll()`, and returns `true` once the attempt has reached a terminal state (`successes >= 3` or `fails >= 3`). Callers must stop calling `roll()` once it returns `true` without an intervening `reset()`.
+### CLI
 
-**`void processRoll(int rollValue)`**
-Classifies one already-computed roll value against the fixed thresholds in `rnd.h` (`PERFECT_SUCCESS=23`, `SUCCESS=18`, `SUCCESS_WITH_FAULT=14`, `FAILURE_THRESHOLD=7`) and updates `successes`/`faults`/`fails`/`totalCost` accordingly. Exposed separately from `roll()` so tests can classify an exact value without going through the RNG.
+CLI functions accept input/output streams with standard streams as defaults.
 
-**`[[nodiscard]] CostOutcome cost()`**
-Finalizes the current attempt. **Preconditions** (both `assert`ed): must not have already been called since the last `reset()`; the attempt must be terminal (`successes >= 3 || fails >= 3`). Returns one of:
+- `promptInt()` and `promptBool()` validate full lines and return false on EOF. Integer destinations change only after validation. Boolean EOF sets false.
+- `promptConfig()` returns an optional SimConfig. EOF yields an empty optional.
+- `SimConfig` holds prior, costOffset, numIterations, and keepGoing.
+- `printCost()` prints an outcome and engine state without finalizing.
+- `runRollSequence()` allows up to 1000 rolls per attempt. Already-completed attempts produce no further rolls or output.
+- `runIteration()` allows an initial attempt plus 100 retries, then increments prior after completion.
+- `runSession()` runs numIterations iterations and prints the grand total. Positive sessions with keepGoing enabled require a clamped prior of at least -2.
+- Orchestration functions return `RunResult::Completed`, `RollLimitExceeded`, `RetryLimitExceeded`, or `InvalidConfig`. Errors propagate through the session to main.
 
-| `CostOutcome` | Meaning |
-|---|---|
-| `RetrySuccess` | Succeeded, but a fault or a fail occurred — attempt should be retried |
-| `Success` | Succeeded cleanly — attempt is done |
-| `RetryFailure` | Failed (3 crit fails), `keepGoing` is true — attempt should be retried |
-| `GiveUpFailure` | Failed (3 crit fails), `keepGoing` is false — attempt is done |
-
-`grandTotalCost` is updated only on `Success`/`GiveUpFailure` (the two "final" outcomes) — retried attempts' cost is discarded on the next `reset()`.
-
-**`void reset()`** — clears per-attempt state (`successes`/`faults`/`fails`/`totalCost`/`costComputed`). Does not touch `prior`, `grandTotalCost`, or `multiplier`.
-
-**`void incPrior()`** — bumps `prior` by 1, capped at `MAX_ESCALATED_PRIOR = 7` (independent of the constructor's wider `[-20, 20]` clamp — if `prior` started above 7, this becomes a permanent no-op). Call once per *completed* iteration, not per retry.
-
-**`void forceNextRoll(int rollValue)`** — test-only. Queues an exact value for the next `roll()` call, bypassing the RNG and the `prior` offset entirely.
-
-**Getters** — `getGrandTotalCost()`, `getScaledCost()` (current attempt's cost × multiplier), `getLastRoll()`, `getSuccesses()`, `getFaults()`, `getFails()` — all `const`, all `[[nodiscard]]`.
-
-### `rndCli` free functions (rndCli.h / rndCli.cpp)
-
-**`void promptInt(int& value, bool aboveZero)`** — loops until a valid integer is read (or stdin hits EOF, in which case it returns without touching `value` — callers must default-initialize).
-
-**`void promptBool(bool& result)`** — loops until `y`/`n` (case-insensitive) or EOF (defaults `result = false`).
-
-**`SimConfig promptConfig()`** — prompts for `prior`/`costOffset`/`numRolls`/`keepGoing`, printing a clamp warning if the entered `prior`/`costOffset` falls outside the range `rnd`'s constructor will silently clamp it to.
-
-**`bool runRollSequence(rnd& simulator)`** — calls `roll()` until terminal, printing each roll. Returns `false` if 1000 rolls pass without reaching a terminal state (safety limit — should be unreachable with fair dice, guards against a threshold-logic regression).
-
-**`rnd::CostOutcome reportCost(rnd& simulator)`** — **not a pure report**: calls `simulator.cost()` (a real state mutation) as well as printing the outcome. Returns the outcome for the caller to branch on.
-
-**`bool runIteration(rnd& simulator)`** — runs roll-sequence → cost → retry-if-needed, up to `MAX_RETRIES = 100` times. Returns `false` if either the safety limit or the retry limit is exceeded (both print to `stderr` and end the whole session, not just this iteration).
-
-**`bool runSession(const SimConfig& config)`** — constructs one `rnd`, runs `config.numRolls` iterations, prints the grand total. Returns `false` if any iteration fails.
+The redundant cost() and reportCost() entry points have been removed. Call finalization and printing explicitly.
 
 ## Common workflows
 
-**Add a new roll outcome tier** (e.g. a new threshold band): add the constant in `rnd.h` near the existing `static constexpr int` thresholds, add the branch in `rnd::processRoll()` (rnd.cpp), add a case to `ROLL_BOUNDARY_CASES` in `tests/test_basic.cpp`, rebuild and run tests.
+**Add a new roll outcome tier** (e.g. a new threshold band): add the constant in `rnd.h` near the existing `static constexpr int` thresholds, add the branch in `Simulator::processRoll()` (rnd.cpp), add a case to `ROLL_BOUNDARY_CASES` in `tests/test_basic.cpp`, rebuild and run tests.
 
 **Add a new test case for an existing table** (`ROLL_BOUNDARY_CASES` or `COST_OUTCOME_CASES` in `tests/test_basic.cpp`): just add a row — no new function needed. Both tables are iterated by a single loop already.
 
@@ -212,15 +189,14 @@ printf "0\n0\n1\nn\nn\n" | ./rnd
 
 **Sanitizer (ASan/UBSan) build won't compile locally on Windows/MinGW** — MinGW doesn't ship `libasan`/`libubsan`. This is expected; rely on CI's `sanitize` job (runs on `ubuntu-24.04`) for sanitizer coverage rather than trying to reproduce it locally on Windows.
 
-**An `assert()` fires inside `rnd::cost()`** — this means a real precondition violation, not test flakiness: either `cost()` was called twice without an intervening `reset()`, or it was called before the attempt reached a terminal state (see [API reference](#rndcost)). Find the caller that broke one of these invariants; don't silence the assert.
+**Invalid attempt transitions** throw `std::logic_error` when finalization occurs before completion or direct roll processing occurs after completion. Reset before starting another attempt.
 
-**A session run with no input at all (piped empty stdin) behaves oddly** — check `SimConfig`'s defaults (`rndCli.h`): if stdin hits EOF before any input, `promptInt`/`promptBool` return without touching their target, so the struct's default member initializers (all zero/false) are what's actually used. If you add a new `SimConfig` field, it must have a default member initializer for the same reason.
 
 **cppcheck flags something in CI** (`static-analysis` job) — check `.github/workflows/ci.yml` for the current suppression list (`missingIncludeSystem`, `shadowFunction`, `unusedStructMember`) before adding a new suppression; these were each verified as false positives (multi-TU analysis limitations / a local variable legitimately named the same as a method), not blanket-suppressed.
 
 **Windows build step behaves differently from Linux/macOS in `build.yml`** — the Windows job produces `rnd.exe`/`test_runner.exe` and uses PowerShell (`pwsh`) syntax for its smoke-test/verify steps (e.g. `` "0`n0`n1`nn`nn" `` instead of `printf`); this is intentional, not a bug, matching `matrix.output`/`matrix.test_output` per-OS in the workflow.
 
-**A very large `numRolls` makes the session take a long time** — there's no upper bound enforced on `numRolls` (only a `> 0` check); this is a known, accepted tradeoff (see [Design decisions](#design-decisions)), not a bug.
+**A very large `numIterations` makes the session take a long time** — there's no upper bound enforced on `numIterations` (only a `> 0` check); this is a known, accepted tradeoff (see [Design decisions](#design-decisions)), not a bug.
 
 ## Contribution guide
 
