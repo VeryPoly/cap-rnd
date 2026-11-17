@@ -503,16 +503,19 @@ static void testRepeatedFinalizationPreservesTotal()
     assert(sim.getGrandTotalCost() == total);
 }
 
-static void testPrintingPreservesTotal()
+static void testRepeatedPrintingProducesSameOutput()
 {
     std::ostringstream output;
     Simulator sim(0, 0, false, 42);
     sim.processRoll(23);
     const auto outcome = sim.finalizeAttempt();
-    const auto total = sim.getGrandTotalCost();
+
     printCost(sim, outcome, output);
+    const auto firstOutput = output.str();
+    output.str("");
     printCost(sim, outcome, output);
-    assert(sim.getGrandTotalCost() == total);
+
+    assert(output.str() == firstOutput);
 }
 
 static void testProcessingAfterFinalizationIsRejected()
@@ -661,7 +664,7 @@ int main()
     testImpossibleSessionIsRejected();
     testIncompleteFinalizationIsRejected();
     testRepeatedFinalizationPreservesTotal();
-    testPrintingPreservesTotal();
+    testRepeatedPrintingProducesSameOutput();
     testProcessingAfterFinalizationIsRejected();
     testResetAllowsAnotherFinalizedAttempt();
     testInputValidationAndCancellation();
