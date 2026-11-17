@@ -28,32 +28,16 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Download Windows artifact
+      - name: Download platform artifacts
         uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477 # v27
         with:
           workflow: build.yml
           commit: ${{ github.sha }}
           workflow_conclusion: success
-          name: cap-rnd-win64
-          path: cap-rnd-win64
-
-      - name: Download Linux artifact
-        uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477 # v27
-        with:
-          workflow: build.yml
-          commit: ${{ github.sha }}
-          workflow_conclusion: success
-          name: cap-rnd-linux-x64
-          path: cap-rnd-linux-x64
-
-      - name: Download macOS artifact
-        uses: dawidd6/action-download-artifact@eab87c9830c39eff17e5a6eadb20bfb4bc880477 # v27
-        with:
-          workflow: build.yml
-          commit: ${{ github.sha }}
-          workflow_conclusion: success
-          name: cap-rnd-macos
-          path: cap-rnd-macos
+          name: '^cap-rnd-(win64|linux-x64|macos)$'
+          name_is_regexp: true
+          path: .
+          merge_multiple: false
 
       - name: Copy documentation
         run: |
