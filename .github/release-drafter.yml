@@ -10,63 +10,73 @@ template: |
 
 categories:
   - title: '🚀 Features'
-    labels:
-      - feature
-      - enhancement
+    when:
+      labels:
+        - feature
+        - enhancement
 
   - title: '🐛 Bug Fixes'
-    labels:
-      - bug
-      - fix
+    when:
+      labels:
+        - bug
+        - fix
 
   - title: '🧪 Tests'
-    labels:
-      - test
-      - tests
+    when:
+      labels:
+        - test
+        - tests
 
   - title: '📚 Documentation'
-    labels:
-      - documentation
-      - docs
+    when:
+      labels:
+        - documentation
+        - docs
 
   - title: '⚙️ CI/CD'
-    labels:
-      - ci
-      - github_actions
-      - dependencies
+    when:
+      labels:
+        - ci
+        - github_actions
+        - dependencies
 
   - title: '🔧 Maintenance'
-    labels:
-      - chore
-      - maintenance
-      - refactor
+    when:
+      labels:
+        - chore
+        - maintenance
+        - refactor
+
+  - type: version-resolver
+    semver-increment: major
+    when:
+      labels:
+        - breaking-change
+  - type: version-resolver
+    semver-increment: minor
+    when:
+      labels:
+        - feature
+        - enhancement
+  - type: version-resolver
+    semver-increment: patch
+    when:
+      labels:
+        - bug
+        - fix
+        - documentation
+        - docs
+        - test
+        - tests
+        - ci
+        - github_actions
+        - dependencies
+        - maintenance
+        - refactor
 
 change-title-escapes: '\<*_&'
 
 version-resolver:
-  major:
-    labels:
-      - breaking-change
-
-  minor:
-    labels:
-      - feature
-      - enhancement
-
-  patch:
-    labels:
-      - bug
-      - fix
-      - documentation
-      - docs
-      - test
-      - tests
-      - ci
-      - github_actions
-      - dependencies
-      - maintenance
-      - refactor
-
   default: patch
 
 # No file-pattern rule maps to feature/enhancement - touching *.cpp/*.h

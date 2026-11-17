@@ -511,7 +511,8 @@ static void testFinalizationAndReset()
     sim.processRoll(23);
     const auto outcome = sim.finalizeAttempt();
     const auto total = sim.getGrandTotalCost();
-    assert(sim.finalizeAttempt() == outcome);
+    const auto repeatedOutcome = sim.finalizeAttempt();
+    assert(repeatedOutcome == outcome);
     assert(sim.getGrandTotalCost() == total);
     printCost(sim, outcome, output);
     printCost(sim, outcome, output);
