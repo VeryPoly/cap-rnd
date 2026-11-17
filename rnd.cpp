@@ -7,14 +7,11 @@
 
 long long Simulator::safeAdd(long long a, long long b)
 {
-    if (b > 0 && a > std::numeric_limits<long long>::max() - b)
+    assert(a >= 0 && b >= 0);
+
+    if (a > std::numeric_limits<long long>::max() - b)
     {
         return std::numeric_limits<long long>::max();
-    }
-
-    if (b < 0 && a < std::numeric_limits<long long>::min() - b)
-    {
-        return std::numeric_limits<long long>::min();
     }
 
     return a + b;
@@ -34,18 +31,18 @@ long long Simulator::safeMultiply(long long a, long long b)
 }
 
 Simulator::Simulator(int initialPrior, int initialCostOffset, bool continueOnFailure,
-                     unsigned int seed, std::function<int()> source)
+                     unsigned int seed, std::function<int()> rollSource)
     : prior(initialPrior),
       successes(0),
       faults(0),
-      fails(0),
-      costComputed(false),
+      criticalFailures(0),
+      attemptFinalized(false),
       totalCost(0),
       grandTotalCost(0),
       multiplier(1),
-      keepGoing(continueOnFailure),
+      continueOnFailure(continueOnFailure),
       lastRoll(0),
-      rollSource(std::move(source)),
+      rollSource(std::move(rollSource)),
       rng(seed)
 {
     prior = std::clamp(prior, PRIOR_MIN, PRIOR_MAX);
@@ -61,7 +58,7 @@ Simulator::Simulator(int initialPrior, int initialCostOffset, bool continueOnFai
 
 bool Simulator::isComplete() const
 {
-    return successes >= REQUIRED_SUCCESSES || fails >= REQUIRED_FAILURES;
+    return successes >= REQUIRED_SUCCESSES || criticalFailures >= REQUIRED_CRITICAL_FAILURES;
 }
 
 bool Simulator::canCompleteCleanly() const
@@ -93,7 +90,7 @@ bool Simulator::roll()
 
 void Simulator::processRoll(int rollValue)
 {
-    if (costComputed || isComplete())
+    if (isComplete())
         throw std::logic_error("Reset the completed attempt before rolling again.");
 
     std::uniform_int_distribution<int> costRoll(1, D20_SIDES);
@@ -122,39 +119,26 @@ void Simulator::processRoll(int rollValue)
     }
     else
     {
-        ++fails;
+        ++criticalFailures;
     }
 }
 
 Simulator::CostOutcome Simulator::finalizeAttempt()
 {
-    if (costComputed)
+    if (attemptFinalized)
         return finalizedOutcome;
     if (!isComplete())
         throw std::logic_error("Complete the attempt before finalizing its cost.");
 
-    costComputed = true;
-
-    bool success = successes >= REQUIRED_SUCCESSES;
-    bool retry = success && (faults > 0 || fails > 0);
-
     CostOutcome outcome;
-
-    if (retry)
+    if (successes >= REQUIRED_SUCCESSES)
     {
-        outcome = CostOutcome::RetrySuccess;
-    }
-    else if (success)
-    {
-        outcome = CostOutcome::Success;
-    }
-    else if (keepGoing)
-    {
-        outcome = CostOutcome::RetryFailure;
+        outcome =
+            faults > 0 || criticalFailures > 0 ? CostOutcome::RetrySuccess : CostOutcome::Success;
     }
     else
     {
-        outcome = CostOutcome::GiveUpFailure;
+        outcome = continueOnFailure ? CostOutcome::RetryFailure : CostOutcome::GiveUpFailure;
     }
 
     if (outcome == CostOutcome::Success || outcome == CostOutcome::GiveUpFailure)
@@ -163,6 +147,7 @@ Simulator::CostOutcome Simulator::finalizeAttempt()
     }
 
     finalizedOutcome = outcome;
+    attemptFinalized = true;
     return outcome;
 }
 
@@ -170,12 +155,12 @@ void Simulator::reset()
 {
     successes = 0;
     faults = 0;
-    fails = 0;
-    costComputed = false;
+    criticalFailures = 0;
+    attemptFinalized = false;
     totalCost = 0;
 }
 
-void Simulator::incPrior()
+void Simulator::incrementPrior()
 {
     if (prior < MAX_ESCALATED_PRIOR)
     {
@@ -208,7 +193,7 @@ int Simulator::getFaults() const
     return faults;
 }
 
-int Simulator::getFails() const
+int Simulator::getCriticalFailures() const
 {
-    return fails;
+    return criticalFailures;
 }

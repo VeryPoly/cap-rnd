@@ -36,4 +36,4 @@ NamespaceIndentation: None
 KeepEmptyLinesAtTheStartOfBlocks: false
 MaxEmptyLinesToKeep: 1
 
-Standard: c++17
+Standard: c++20

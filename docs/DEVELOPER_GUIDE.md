@@ -32,13 +32,13 @@ flowchart TD
     B --> C[runSession]
     C --> D[runIteration]
     D --> E[runRollSequence]
-    E -->|roll until 3 successes<br/>or 3 fails, or safety limit| F{complete?}
+    E -->|roll until 3 successes<br/>or 3 critical failures, or safety limit| F{complete?}
     F -->|yes| G[finalizeAttempt and printCost]
     F -->|no, safety limit hit| H[abort session]
     G --> I[simulator.cost]
     I --> J{retry outcome?}
     J -->|RetrySuccess / RetryFailure| D
-    J -->|Success / GiveUpFailure| K[incPrior, iteration done]
+    J -->|Success / GiveUpFailure| K[incrementPrior, iteration done]
     K --> L{more iterations?}
     L -->|yes| D
     L -->|no| M[print grand total]
@@ -47,7 +47,7 @@ flowchart TD
     N -->|no| O[exit]
 ```
 
-`rnd` itself has no knowledge of sessions or iterations — it only knows about the *current attempt* (`successes`/`faults`/`fails`/`totalCost`, cleared by `reset()`) and *session-lifetime* state (`grandTotalCost`, `prior` escalation). The orchestration layer (`rndCli.cpp`) is what turns single rolls into attempts, attempts into iterations (with retries), and iterations into a full session.
+`rnd` itself has no knowledge of sessions or iterations — it only knows about the *current attempt* (`successes`/`faults`/`criticalFailures`/`totalCost`, cleared by `reset()`) and *session-lifetime* state (`grandTotalCost`, `prior` escalation). The orchestration layer (`rndCli.cpp`) is what turns single rolls into attempts, attempts into iterations (with retries), and iterations into a full session.
 
 ## Installation
 
@@ -118,7 +118,7 @@ These are decisions with real reasoning behind them — worth knowing before you
 
 **Why `rndCli.cpp` exists as a separate translation unit from `rndMain.cpp`.** The test binary (`tests/test_basic.cpp`) needs `promptInt`/`runSession`/etc. but must not link a second `main()`. Splitting orchestration from the entry point is what makes `tests/test_basic.cpp` + `rndCli.cpp` + `rnd.cpp` a valid, self-contained link.
 
-**Why saturating arithmetic (`safeAdd`/`safeMultiply`) instead of raw `+`/`*`.** Cost accumulates across every iteration in a session (`grandTotalCost`); an unbounded `numIterations` (no upper limit is enforced — see [Troubleshooting](#troubleshooting)) makes overflow a real reachable condition over a long session, not just a theoretical one. Saturating at `LLONG_MIN`/`LLONG_MAX` beats silently wrapping into a negative or nonsensical total. `safeMultiply` asserts both operands are non-negative — every current call site guarantees this (costs are always ≥ 0); if you add a new call site, keep that invariant true or the assert fires.
+**Why saturating arithmetic (`safeAdd`/`safeMultiply`) instead of raw `+`/`*`.** Cost accumulates across every iteration in a session (`grandTotalCost`); an unbounded `numIterations` (no upper limit is enforced — see [Troubleshooting](#troubleshooting)) makes overflow a real reachable condition over a long session, not just a theoretical one. Saturating at `LLONG_MAX` beats silently wrapping into a negative or nonsensical total. Both helpers assert that their operands are non-negative — every current call site guarantees this (costs are always ≥ 0); if you add a new call site, keep that invariant true or the assert fires.
 
 **Roll generation.** The engine accepts an optional callable producing modified roll values. Without it, rolls use the seeded RNG and prior. Tests own their scripted queues in a fixture and supply the callable. Cost rolls always use the seeded RNG.
 
@@ -144,7 +144,7 @@ These are decisions with real reasoning behind them — worth knowing before you
 - `isComplete()` checks the success and failure thresholds. `canCompleteCleanly()` checks whether d20 + prior can reach the clean-success threshold.
 - `finalizeAttempt()` returns a CostOutcome. RetrySuccess and RetryFailure request another attempt. Success and GiveUpFailure finish an iteration and add its unscaled cost to the grand total. Finalization is idempotent until reset.
 - `reset()` clears counters, attempt cost, and finalization status. Prior, RNG state, last roll, and grand total persist.
-- `incPrior()` increases prior up to 7. Values initially above 7 remain unchanged.
+- `incrementPrior()` increases prior up to 7. Values initially above 7 remain unchanged.
 - Const getters expose counters and scaled costs. Cost scaling is 10^(costOffset+3), with saturating arithmetic.
 
 ### CLI
@@ -153,11 +153,11 @@ CLI functions accept input/output streams with standard streams as defaults.
 
 - `promptInt()` and `promptBool()` validate full lines and return false on EOF. Integer destinations change only after validation. Boolean EOF sets false.
 - `promptConfig()` returns an optional SimConfig. EOF yields an empty optional.
-- `SimConfig` holds prior, costOffset, numIterations, and keepGoing.
+- `SimConfig` holds prior, costOffset, numIterations, and continueOnFailure.
 - `printCost()` prints an outcome and engine state without finalizing.
 - `runRollSequence()` allows up to 1000 rolls per attempt. Already-completed attempts produce no further rolls or output.
 - `runIteration()` allows an initial attempt plus 100 retries, then increments prior after completion.
-- `runSession()` runs numIterations iterations and prints the grand total. Positive sessions with keepGoing enabled require a clamped prior of at least -2.
+- `runSession()` runs numIterations iterations and prints the grand total. Positive sessions with continueOnFailure enabled require a clamped prior of at least -2.
 - Orchestration functions return `RunResult::Completed`, `RollLimitExceeded`, `RetryLimitExceeded`, or `InvalidConfig`. Errors propagate through the session to main.
 
 The redundant cost() and reportCost() entry points have been removed. Call finalization and printing explicitly.

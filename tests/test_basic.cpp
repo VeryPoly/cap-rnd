@@ -14,8 +14,9 @@
 class ScriptedSimulator : public Simulator
 {
 public:
-    ScriptedSimulator(int prior, int costOffset, bool keepGoing, unsigned int seed)
-        : ScriptedSimulator(prior, costOffset, keepGoing, seed, std::make_shared<std::queue<int>>())
+    ScriptedSimulator(int prior, int costOffset, bool continueOnFailure, unsigned int seed)
+        : ScriptedSimulator(prior, costOffset, continueOnFailure, seed,
+                            std::make_shared<std::queue<int>>())
     {
     }
 
@@ -26,9 +27,9 @@ public:
     }
 
 private:
-    ScriptedSimulator(int prior, int costOffset, bool keepGoing, unsigned int seed,
+    ScriptedSimulator(int prior, int costOffset, bool continueOnFailure, unsigned int seed,
                       std::shared_ptr<std::queue<int>> scripted)
-        : Simulator(prior, costOffset, keepGoing, seed,
+        : Simulator(prior, costOffset, continueOnFailure, seed,
                     [scripted]()
                     {
                         if (scripted->empty())
@@ -51,7 +52,7 @@ static void testConstructor()
     assert(sim.getGrandTotalCost() == 0);
     assert(sim.getSuccesses() == 0);
     assert(sim.getFaults() == 0);
-    assert(sim.getFails() == 0);
+    assert(sim.getCriticalFailures() == 0);
 }
 
 static void testReset()
@@ -67,7 +68,7 @@ static void testReset()
     assert(sim.getScaledCost() == 0);
     assert(sim.getSuccesses() == 0);
     assert(sim.getFaults() == 0);
-    assert(sim.getFails() == 0);
+    assert(sim.getCriticalFailures() == 0);
 }
 
 static void testPriorIncrement()
@@ -75,7 +76,7 @@ static void testPriorIncrement()
     Simulator incremented(0, 0, false, 42);
     Simulator expected(7, 0, false, 42);
     for (int i = 0; i < 20; ++i)
-        incremented.incPrior();
+        incremented.incrementPrior();
     (void)incremented.roll();
     (void)expected.roll();
     assert(incremented.getLastRoll() == expected.getLastRoll());
@@ -104,7 +105,7 @@ static void testConstructorClampsPrior()
         const bool completeExpected = expected.roll();
         assert(clamped.getLastRoll() == expected.getLastRoll());
         assert(clamped.getSuccesses() == expected.getSuccesses());
-        assert(clamped.getFails() == expected.getFails());
+        assert(clamped.getCriticalFailures() == expected.getCriticalFailures());
         assert(completeClamped == completeExpected);
     }
 }
@@ -136,7 +137,7 @@ static void testMultipleResets()
 
         assert(sim.getSuccesses() == 0);
         assert(sim.getFaults() == 0);
-        assert(sim.getFails() == 0);
+        assert(sim.getCriticalFailures() == 0);
     }
 }
 
@@ -145,7 +146,7 @@ struct RollBoundaryCase
     int rollValue;
     int expectedSuccesses;
     int expectedFaults;
-    int expectedFails;
+    int expectedCriticalFailures;
 };
 
 static const RollBoundaryCase ROLL_BOUNDARY_CASES[] = {
@@ -167,7 +168,7 @@ static void testProcessRollBoundaries()
 
         assert(sim.getSuccesses() == c.expectedSuccesses);
         assert(sim.getFaults() == c.expectedFaults);
-        assert(sim.getFails() == c.expectedFails);
+        assert(sim.getCriticalFailures() == c.expectedCriticalFailures);
     }
 }
 
@@ -186,10 +187,10 @@ static void testProcessRollCriticalFailure()
     Simulator sim(0, 0, false, 1);
 
     sim.processRoll(6);
-    assert(sim.getFails() == 1);
+    assert(sim.getCriticalFailures() == 1);
 
     sim.processRoll(1);
-    assert(sim.getFails() == 2);
+    assert(sim.getCriticalFailures() == 2);
 }
 
 static void testProcessRollAccumulatesToThreshold()
@@ -216,14 +217,14 @@ static void testRollReturnsTrueOnceSuccessThresholdReached()
     assert(complete == true);
 }
 
-static void testRollReturnsTrueOnceFailThresholdReached()
+static void testRollReturnsTrueOnceCriticalFailureThresholdReached()
 {
     Simulator sim(0, 0, false, 1);
 
     sim.processRoll(6);
     sim.processRoll(6);
     sim.processRoll(6);
-    assert(sim.getFails() == 3);
+    assert(sim.getCriticalFailures() == 3);
 
     bool complete = sim.roll();
     assert(complete == true);
@@ -232,7 +233,7 @@ static void testRollReturnsTrueOnceFailThresholdReached()
 struct CostOutcomeCase
 {
     int rollValue;
-    bool keepGoing;
+    bool continueOnFailure;
     Simulator::CostOutcome expectedOutcome;
     bool expectGrandTotalPositive;
 };
@@ -246,7 +247,7 @@ static const CostOutcomeCase COST_OUTCOME_CASES[] = {
 
 static Simulator completedAttempt(const CostOutcomeCase& testCase)
 {
-    Simulator simulator(0, 0, testCase.keepGoing, 1);
+    Simulator simulator(0, 0, testCase.continueOnFailure, 1);
     for (int i = 0; i < 3; ++i)
         simulator.processRoll(testCase.rollValue);
     return simulator;
@@ -265,14 +266,14 @@ static void testCostOutcomes()
 }
 
 // Every COST_OUTCOME_CASES row drives faults>0 via SUCCESS_WITH_FAULT
-// rolls; this covers the other side of retry's "faults > 0 || fails > 0" -
+// rolls; this covers the other side of retry's "faults > 0 || criticalFailures > 0" -
 // a crit failure earlier in the same attempt, followed by enough plain
 // successes to still reach the success threshold.
-static void testCostOutcomeRetrySuccessViaFailsNotFaults()
+static void testCostOutcomeRetrySuccessViaCriticalFailures()
 {
     Simulator sim(0, 0, false, 1);
 
-    sim.processRoll(6);   // fails = 1
+    sim.processRoll(6);   // criticalFailures = 1
     sim.processRoll(18);  // successes = 1
     sim.processRoll(18);  // successes = 2
     sim.processRoll(18);  // successes = 3
@@ -357,18 +358,23 @@ static void testPromptIntEofLeavesValueUntouched()
 
 static void testPromptBoolParsesYesNoCaseInsensitive()
 {
-    std::ostringstream output;
+    struct BoolInputCase
     {
-        std::istringstream input("Y\n");
-        bool result = false;
-        promptBool(result, input, output);
-        assert(result == true);
-    }
+        const char* text;
+        bool expected;
+    };
+    const BoolInputCase cases[] = {
+        {"Y\n", true}, {"N\n", false},      {" y \t", true},
+        {"n", false},  {" \nq\nY\n", true}, {"yn\nn\n", false},
+    };
+    for (const auto& testCase : cases)
     {
-        std::istringstream input("N\n");
-        bool result = true;
-        promptBool(result, input, output);
-        assert(result == false);
+        std::ostringstream output;
+        std::istringstream input(testCase.text);
+        bool result = !testCase.expected;
+        const bool accepted = promptBool(result, input, output);
+        assert(accepted);
+        assert(result == testCase.expected);
     }
 }
 
@@ -404,10 +410,10 @@ static void testSimConfigDefaultValues()
     assert(config.prior == 0);
     assert(config.costOffset == 0);
     assert(config.numIterations == 0);
-    assert(config.keepGoing == false);
+    assert(config.continueOnFailure == false);
 }
 
-static void testRunSessionZeroRollsCompletesImmediately()
+static void testRunSessionWithZeroIterationsCompletesImmediately()
 {
     std::ostringstream errors;
     std::ostringstream output;
@@ -417,7 +423,7 @@ static void testRunSessionZeroRollsCompletesImmediately()
     assert(completed == RunResult::Completed);
 }
 
-static void testRunIterationCompletesWithoutHanging()
+static void testRunIterationSucceedsAndResetsAttempt()
 {
     std::ostringstream errors;
     std::ostringstream output;
@@ -427,7 +433,7 @@ static void testRunIterationCompletesWithoutHanging()
     const auto completed = runIteration(sim, output, errors);
 
     assert(sim.getSuccesses() == 0);
-    assert(sim.getFails() == 0);
+    assert(sim.getCriticalFailures() == 0);
     assert(completed == RunResult::Completed);
 }
 
@@ -471,9 +477,8 @@ static void testRunIterationSucceedsAfterOneRetry()
     assert(completed == RunResult::Completed);
 }
 
-static void testFinalizationAndReset()
+static void testIncompleteFinalizationIsRejected()
 {
-    std::ostringstream output;
     Simulator sim(0, 0, false, 42);
     bool rejected = false;
     try
@@ -485,16 +490,40 @@ static void testFinalizationAndReset()
         rejected = true;
     }
     assert(rejected);
+}
+
+static void testRepeatedFinalizationPreservesTotal()
+{
+    Simulator sim(0, 0, false, 42);
     sim.processRoll(23);
     const auto outcome = sim.finalizeAttempt();
     const auto total = sim.getGrandTotalCost();
     const auto repeatedOutcome = sim.finalizeAttempt();
     assert(repeatedOutcome == outcome);
     assert(sim.getGrandTotalCost() == total);
+}
+
+static void testRepeatedPrintingProducesSameOutput()
+{
+    std::ostringstream output;
+    Simulator sim(0, 0, false, 42);
+    sim.processRoll(23);
+    const auto outcome = sim.finalizeAttempt();
+
     printCost(sim, outcome, output);
+    const auto firstOutput = output.str();
+    output.str("");
     printCost(sim, outcome, output);
-    assert(sim.getGrandTotalCost() == total);
-    rejected = false;
+
+    assert(output.str() == firstOutput);
+}
+
+static void testProcessingAfterFinalizationIsRejected()
+{
+    Simulator sim(0, 0, false, 42);
+    sim.processRoll(23);
+    (void)sim.finalizeAttempt();
+    bool rejected = false;
     try
     {
         sim.processRoll(18);
@@ -504,6 +533,14 @@ static void testFinalizationAndReset()
         rejected = true;
     }
     assert(rejected);
+}
+
+static void testResetAllowsAnotherFinalizedAttempt()
+{
+    Simulator sim(0, 0, false, 42);
+    sim.processRoll(23);
+    (void)sim.finalizeAttempt();
+    const auto total = sim.getGrandTotalCost();
     sim.reset();
     assert(sim.getScaledCost() == 0);
     assert(sim.getGrandTotalCost() == total);
@@ -584,7 +621,7 @@ static void testImpossibleSessionIsRejected()
     SimConfig config;
     config.prior = -3;
     config.numIterations = 1;
-    config.keepGoing = true;
+    config.continueOnFailure = true;
     const auto completed = runSession(config, output, errors);
     assert(completed == RunResult::InvalidConfig);
     Simulator impossible(-3, 0, true, 42);
@@ -625,7 +662,11 @@ int main()
     testSuccessOnLastAllowedRetry();
     testCompletedSequencePrintsNoExtraRoll();
     testImpossibleSessionIsRejected();
-    testFinalizationAndReset();
+    testIncompleteFinalizationIsRejected();
+    testRepeatedFinalizationPreservesTotal();
+    testRepeatedPrintingProducesSameOutput();
+    testProcessingAfterFinalizationIsRejected();
+    testResetAllowsAnotherFinalizedAttempt();
     testInputValidationAndCancellation();
     testConstructor();
     testReset();
@@ -640,10 +681,10 @@ int main()
     testProcessRollAccumulatesToThreshold();
 
     testRollReturnsTrueOnceSuccessThresholdReached();
-    testRollReturnsTrueOnceFailThresholdReached();
+    testRollReturnsTrueOnceCriticalFailureThresholdReached();
 
     testCostOutcomes();
-    testCostOutcomeRetrySuccessViaFailsNotFaults();
+    testCostOutcomeRetrySuccessViaCriticalFailures();
     testPrintCostOutcomes();
 
     testRunRollSequenceExhaustsSafetyLimit();
@@ -657,8 +698,8 @@ int main()
     testPromptBoolEofDefaultsFalse();
 
     testSimConfigDefaultValues();
-    testRunSessionZeroRollsCompletesImmediately();
-    testRunIterationCompletesWithoutHanging();
+    testRunSessionWithZeroIterationsCompletesImmediately();
+    testRunIterationSucceedsAndResetsAttempt();
     testRunIterationSucceedsAfterOneRetry();
     testRunIterationExhaustsRetryLimit();
 

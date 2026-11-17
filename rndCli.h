@@ -15,7 +15,7 @@ struct SimConfig
     int prior = 0;
     int costOffset = 0;
     int numIterations = 0;
-    bool keepGoing = false;
+    bool continueOnFailure = false;
 };
 
 enum class RunResult
