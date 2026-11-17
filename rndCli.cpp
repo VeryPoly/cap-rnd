@@ -42,15 +42,13 @@ bool promptBool(bool& result, std::istream& input, std::ostream& output)
     while (std::getline(input, line))
     {
         std::istringstream parsed(line);
-        char candidate;
-        if (parsed >> candidate && (parsed >> std::ws).eof())
+        char candidate = 0;
+        parsed >> candidate >> std::ws;
+        candidate = static_cast<char>(std::tolower(static_cast<unsigned char>(candidate)));
+        if (!parsed.fail() && parsed.eof() && (candidate == 'y' || candidate == 'n'))
         {
-            candidate = static_cast<char>(std::tolower(static_cast<unsigned char>(candidate)));
-            if (candidate == 'y' || candidate == 'n')
-            {
-                result = candidate == 'y';
-                return true;
-            }
+            result = candidate == 'y';
+            return true;
         }
         output << "Enter y or n: ";
     }
@@ -78,7 +76,7 @@ std::optional<SimConfig> promptConfig(std::istream& input, std::ostream& output)
         return std::nullopt;
 
     output << "Keep Going if failed? (y/n): ";
-    if (!promptBool(config.keepGoing, input, output))
+    if (!promptBool(config.continueOnFailure, input, output))
         return std::nullopt;
 
     return config;
@@ -113,8 +111,8 @@ void printCost(const Simulator& simulator, Simulator::CostOutcome outcome, std::
 
     if (succeeded)
     {
-        output << "\nFaults: " << simulator.getFaults() << ", " << simulator.getFails()
-               << " crit faults\n";
+        output << "\nFaults: " << simulator.getFaults() << ", " << simulator.getCriticalFailures()
+               << " critical failures\n";
     }
 
     output << "Total cost: " << simulator.getScaledCost();
@@ -139,11 +137,7 @@ void printCost(const Simulator& simulator, Simulator::CostOutcome outcome, std::
 RunResult runIteration(Simulator& simulator, std::ostream& output, std::ostream& errors)
 {
     constexpr int MAX_RETRIES = 100;
-    int retryCount = 0;
-
-    bool retry = false;
-
-    do
+    for (int attempt = 0; attempt <= MAX_RETRIES; ++attempt)
     {
         const auto result = runRollSequence(simulator, output);
         if (result != RunResult::Completed)
@@ -152,37 +146,27 @@ RunResult runIteration(Simulator& simulator, std::ostream& output, std::ostream&
             return result;
         }
 
-        Simulator::CostOutcome outcome = simulator.finalizeAttempt();
+        const auto outcome = simulator.finalizeAttempt();
         printCost(simulator, outcome, output);
-
-        retry = outcome == Simulator::CostOutcome::RetrySuccess ||
-                outcome == Simulator::CostOutcome::RetryFailure;
-
         simulator.reset();
 
-        if (retry)
+        if (outcome == Simulator::CostOutcome::Success ||
+            outcome == Simulator::CostOutcome::GiveUpFailure)
         {
-            ++retryCount;
-
-            if (retryCount > MAX_RETRIES)
-            {
-                errors << "Retry limit exceeded.\n";
-                return RunResult::RetryLimitExceeded;
-            }
+            simulator.incrementPrior();
+            return RunResult::Completed;
         }
+    }
 
-    } while (retry);
-
-    simulator.incPrior();
-
-    return RunResult::Completed;
+    errors << "Retry limit exceeded.\n";
+    return RunResult::RetryLimitExceeded;
 }
 
 RunResult runSession(const SimConfig& config, std::ostream& output, std::ostream& errors)
 {
-    Simulator simulator(config.prior, config.costOffset, config.keepGoing);
+    Simulator simulator(config.prior, config.costOffset, config.continueOnFailure);
 
-    if (config.numIterations > 0 && config.keepGoing && !simulator.canCompleteCleanly())
+    if (config.numIterations > 0 && config.continueOnFailure && !simulator.canCompleteCleanly())
     {
         errors << "Prior must be at least -2 when continuing after failures.\n";
         return RunResult::InvalidConfig;

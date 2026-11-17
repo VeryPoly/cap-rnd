@@ -225,10 +225,15 @@ Keep Going if failed? (y/n): y
 
 18 22 14
 
-Faults: 1, 0 crit faults
-Total cost: 470000 success.
+Faults: 1, 0 critical failures
+Total cost: 470000 success, redoing to remove fault.
 
-Grand total cost across all iterations: 470000
+18 22 20
+
+Faults: 0, 0 critical failures
+Total cost: 350000 success.
+
+Grand total cost across all iterations: 350000
 
 ---
 

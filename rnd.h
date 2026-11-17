@@ -15,9 +15,9 @@ private:
     static constexpr int FAILURE_THRESHOLD = 7;
 
     static constexpr int REQUIRED_SUCCESSES = 3;
-    static constexpr int REQUIRED_FAILURES = 3;
+    static constexpr int REQUIRED_CRITICAL_FAILURES = 3;
 
-    // Escalation cap for incPrior(), distinct from the constructor's
+    // Escalation cap for incrementPrior(), distinct from the constructor's
     // wider [-20, 20] clamp on the initial prior.
     static constexpr int MAX_ESCALATED_PRIOR = 7;
 
@@ -25,17 +25,17 @@ private:
 
     int successes;
     int faults;
-    int fails;
+    int criticalFailures;
 
     // Records whether the current attempt has already been finalized.
-    bool costComputed;
+    bool attemptFinalized;
 
     long long totalCost;
     long long grandTotalCost;
 
     long long multiplier;
 
-    bool keepGoing;
+    bool continueOnFailure;
 
     int lastRoll;
 
@@ -58,8 +58,9 @@ public:
     {
         RetrySuccess,  // succeeded, but a fault or fail occurred - attempt retries
         Success,       // succeeded with no fault or fail - attempt finalizes
-        RetryFailure,  // failed (3 crit fails), keepGoing is true - attempt retries
-        GiveUpFailure  // failed (3 crit fails), keepGoing is false - attempt finalizes
+        RetryFailure,  // failed (3 critical failures), continueOnFailure is true - attempt retries
+        GiveUpFailure  // failed (3 critical failures), continueOnFailure is false - attempt
+                       // finalizes
     };
 
 private:
@@ -78,7 +79,7 @@ public:
     [[nodiscard]] CostOutcome finalizeAttempt();
 
     void reset();
-    void incPrior();
+    void incrementPrior();
 
     // Cumulative cost across every finalized iteration this session.
     [[nodiscard]] long long getGrandTotalCost() const;
@@ -90,7 +91,7 @@ public:
 
     [[nodiscard]] int getSuccesses() const;
     [[nodiscard]] int getFaults() const;
-    [[nodiscard]] int getFails() const;
+    [[nodiscard]] int getCriticalFailures() const;
 };
 
 // Source compatibility for existing engine users.
