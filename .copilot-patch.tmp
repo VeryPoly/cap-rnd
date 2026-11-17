@@ -1,0 +1,12 @@
+static void testPrintingPreservesTotal()
+{
+    std::ostringstream output;
+    Simulator sim(0, 0, false, 42);
+    sim.processRoll(23);
+    const auto outcome = sim.finalizeAttempt();
+    const auto total = sim.getGrandTotalCost();
+    printCost(sim, outcome, output);
+    printCost(sim, outcome, output);
+    const auto repeatedTotal = sim.getGrandTotalCost();
+    assert(repeatedTotal == total);
+}
