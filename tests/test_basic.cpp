@@ -19,9 +19,10 @@ public:
     {
     }
 
-    void forceNextRoll(int value)
+    void forceNextRoll(int value, int count = 1)
     {
-        rolls->push(value);
+        for (int i = 0; i < count; ++i)
+            rolls->push(value);
     }
 
 private:
@@ -83,55 +84,46 @@ static void testPriorIncrement()
 // comparing an out-of-range constructor against the boundary value it
 // should clamp to: same seed => same rng draws => identical observable
 // state if (and only if) both actually clamp to the same value.
-static void testConstructorClampsPriorToMax()
+struct ClampCase
 {
-    Simulator simClamped(1000000, 0, false, 42);
-    Simulator simExplicit(Simulator::PRIOR_MAX, 0, false, 42);
+    int input;
+    int boundary;
+};
 
-    bool completeClamped = simClamped.roll();
-    bool completeExplicit = simExplicit.roll();
-
-    assert(simClamped.getLastRoll() == simExplicit.getLastRoll());
-    assert(simClamped.getSuccesses() == simExplicit.getSuccesses());
-    assert(simClamped.getFails() == simExplicit.getFails());
-    assert(completeClamped == completeExplicit);
+static void testConstructorClampsPrior()
+{
+    const ClampCase cases[] = {
+        {1000000, Simulator::PRIOR_MAX},
+        {-1000000, Simulator::PRIOR_MIN},
+    };
+    for (const auto& c : cases)
+    {
+        Simulator clamped(c.input, 0, false, 42);
+        Simulator expected(c.boundary, 0, false, 42);
+        const bool completeClamped = clamped.roll();
+        const bool completeExpected = expected.roll();
+        assert(clamped.getLastRoll() == expected.getLastRoll());
+        assert(clamped.getSuccesses() == expected.getSuccesses());
+        assert(clamped.getFails() == expected.getFails());
+        assert(completeClamped == completeExpected);
+    }
 }
 
-static void testConstructorClampsPriorToMin()
+static void testConstructorClampsCostOffset()
 {
-    Simulator simClamped(-1000000, 0, false, 42);
-    Simulator simExplicit(Simulator::PRIOR_MIN, 0, false, 42);
-
-    bool completeClamped = simClamped.roll();
-    bool completeExplicit = simExplicit.roll();
-
-    assert(simClamped.getLastRoll() == simExplicit.getLastRoll());
-    assert(simClamped.getSuccesses() == simExplicit.getSuccesses());
-    assert(simClamped.getFails() == simExplicit.getFails());
-    assert(completeClamped == completeExplicit);
-}
-
-static void testConstructorClampsCostOffsetToMax()
-{
-    Simulator simClamped(0, 1000000, false, 42);
-    Simulator simExplicit(0, Simulator::COST_OFFSET_MAX, false, 42);
-
-    simClamped.processRoll(10);
-    simExplicit.processRoll(10);
-
-    assert(simClamped.getScaledCost() == simExplicit.getScaledCost());
-    assert(simClamped.getScaledCost() > 0);
-}
-
-static void testConstructorClampsCostOffsetToMin()
-{
-    Simulator simClamped(0, -1000000, false, 42);
-    Simulator simExplicit(0, Simulator::COST_OFFSET_MIN, false, 42);
-
-    simClamped.processRoll(10);
-    simExplicit.processRoll(10);
-
-    assert(simClamped.getScaledCost() == simExplicit.getScaledCost());
+    const ClampCase cases[] = {
+        {1000000, Simulator::COST_OFFSET_MAX},
+        {-1000000, Simulator::COST_OFFSET_MIN},
+    };
+    for (const auto& c : cases)
+    {
+        Simulator clamped(0, c.input, false, 42);
+        Simulator expected(0, c.boundary, false, 42);
+        clamped.processRoll(10);
+        expected.processRoll(10);
+        assert(clamped.getScaledCost() == expected.getScaledCost());
+        assert(clamped.getScaledCost() > 0);
+    }
 }
 
 static void testMultipleResets()
@@ -252,14 +244,19 @@ static const CostOutcomeCase COST_OUTCOME_CASES[] = {
     {6, false, Simulator::CostOutcome::GiveUpFailure, true},
 };
 
+static Simulator completedAttempt(const CostOutcomeCase& testCase)
+{
+    Simulator simulator(0, 0, testCase.keepGoing, 1);
+    for (int i = 0; i < 3; ++i)
+        simulator.processRoll(testCase.rollValue);
+    return simulator;
+}
+
 static void testCostOutcomes()
 {
     for (const CostOutcomeCase& c : COST_OUTCOME_CASES)
     {
-        Simulator sim(0, 0, c.keepGoing, 1);
-        sim.processRoll(c.rollValue);
-        sim.processRoll(c.rollValue);
-        sim.processRoll(c.rollValue);
+        auto sim = completedAttempt(c);
 
         Simulator::CostOutcome outcome = sim.finalizeAttempt();
         assert(outcome == c.expectedOutcome);
@@ -289,10 +286,7 @@ static void testPrintCostOutcomes()
     std::ostringstream output;
     for (const CostOutcomeCase& c : COST_OUTCOME_CASES)
     {
-        Simulator sim(0, 0, c.keepGoing, 1);
-        sim.processRoll(c.rollValue);
-        sim.processRoll(c.rollValue);
-        sim.processRoll(c.rollValue);
+        auto sim = completedAttempt(c);
 
         Simulator::CostOutcome outcome = sim.finalizeAttempt();
         output.str("");
@@ -305,30 +299,13 @@ static void testPrintCostOutcomes()
     }
 }
 
-static void testRunRollSequenceReturnsTrueWhenAlreadyAtThreshold()
-{
-    std::ostringstream output;
-    Simulator sim(0, 0, false, 1);
-
-    sim.processRoll(18);
-    sim.processRoll(18);
-    sim.processRoll(18);
-    assert(sim.getSuccesses() == 3);
-
-    const auto complete = runRollSequence(sim, output);
-    assert(complete == RunResult::Completed);
-}
-
 static void testRunRollSequenceExhaustsSafetyLimit()
 {
     std::ostringstream output;
     ScriptedSimulator sim(0, 0, false, 1);
 
     // Neutral rolls exercise the limit without completing the attempt.
-    for (int i = 0; i < 1000; ++i)
-    {
-        sim.forceNextRoll(10);
-    }
+    sim.forceNextRoll(10, 1000);
 
     const auto complete = runRollSequence(sim, output);
     assert(complete == RunResult::RollLimitExceeded);
@@ -584,15 +561,20 @@ static void testSuccessOnLastAllowedRetry()
 
 static void testCompletedSequencePrintsNoExtraRoll()
 {
-    std::ostringstream output;
-    Simulator sim(0, 0, false, 42);
-    sim.processRoll(23);
-    assert(sim.getLastRoll() == 23);
-    const auto cost = sim.getScaledCost();
-    const auto completed = runRollSequence(sim, output);
-    assert(completed == RunResult::Completed);
-    assert(output.str().empty());
-    assert(sim.getScaledCost() == cost);
+    for (int rollValue : {18, 23})
+    {
+        std::ostringstream output;
+        Simulator sim(0, 0, false, 42);
+        while (!sim.isComplete())
+            sim.processRoll(rollValue);
+        assert(sim.getSuccesses() == 3);
+        assert(sim.getLastRoll() == rollValue);
+        const auto cost = sim.getScaledCost();
+        const auto completed = runRollSequence(sim, output);
+        assert(completed == RunResult::Completed);
+        assert(output.str().empty());
+        assert(sim.getScaledCost() == cost);
+    }
 }
 
 static void testImpossibleSessionIsRejected()
@@ -628,8 +610,7 @@ static void testSessionUsesProvidedStreams()
 static void testIterationPropagatesRollLimit()
 {
     ScriptedSimulator sim(0, 0, false, 42);
-    for (int i = 0; i < 1000; ++i)
-        sim.forceNextRoll(10);
+    sim.forceNextRoll(10, 1000);
     std::ostringstream output;
     std::ostringstream errors;
     const auto result = runIteration(sim, output, errors);
@@ -649,10 +630,8 @@ int main()
     testConstructor();
     testReset();
     testPriorIncrement();
-    testConstructorClampsPriorToMax();
-    testConstructorClampsPriorToMin();
-    testConstructorClampsCostOffsetToMax();
-    testConstructorClampsCostOffsetToMin();
+    testConstructorClampsPrior();
+    testConstructorClampsCostOffset();
     testMultipleResets();
 
     testProcessRollBoundaries();
@@ -667,7 +646,6 @@ int main()
     testCostOutcomeRetrySuccessViaFailsNotFaults();
     testPrintCostOutcomes();
 
-    testRunRollSequenceReturnsTrueWhenAlreadyAtThreshold();
     testRunRollSequenceExhaustsSafetyLimit();
 
     testPromptIntParsesValidInteger();
